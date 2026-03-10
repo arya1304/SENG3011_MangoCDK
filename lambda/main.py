@@ -1,7 +1,7 @@
 import json
 import os
 import boto3
-from abs.cpi import get_cpi
+from cpi import get_cpi
 
 s3 = boto3.client('s3')
 
