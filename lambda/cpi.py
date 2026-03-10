@@ -1,7 +1,7 @@
 import json
 import os
 import requests
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException
 from mangum import Mangum
 import boto3
@@ -29,7 +29,7 @@ def get_cpi(
     - format:                   e.g., "json"
     - detail:                   e.g., "dataonly"
     """
-    timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%SZ")
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
 
     if not BUCKET_NAME:
         raise HTTPException(status_code=500, detail="Server configuration error: BUCKET_NAME not set")
