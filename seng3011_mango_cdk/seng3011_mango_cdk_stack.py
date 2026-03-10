@@ -40,3 +40,12 @@ class Seng3011MangoCdkStack(Stack):
                 "BUCKET_NAME": app_bucket.bucket_name
             }
         )
+
+        # New CPI Lambda
+        cpi_function = _lambda.Function(self, "CpiFunction",
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            handler="cpi.handler",
+            code=_lambda.Code.from_bucket(assets_bucket, "lambda.zip"),
+            role=lab_role,
+            environment={"BUCKET_NAME": app_bucket.bucket_name}
+        )

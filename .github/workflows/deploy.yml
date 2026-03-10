@@ -37,7 +37,7 @@ jobs:
 
       - name: Zip and upload Lambda code to S3
         run: |
-          zip lambda.zip lambda/main.py
+          zip -j lambda.zip lambda/main.py lambda/cpi.py
           aws s3 cp lambda.zip s3://cdk-assets-083483698371-us-east-1/lambda.zip
 
       - name: Deploy CDK Stack
