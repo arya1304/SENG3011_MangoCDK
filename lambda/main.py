@@ -1,22 +1,11 @@
-import json
-import os
-import boto3
-from cpi import get_cpi
+from fastapi import FastAPI
+from mangum import Mangum
+from routers import collect, preprocess, public
 
-s3 = boto3.client('s3')
+app = FastAPI()
 
-def handler(event, context):
-    path = event.get("path", "")
+app.include_router(collect.router)
+app.include_router(preprocess.router)
+app.include_router(public.router)
 
-    if path == "/cpi":
-        return get_cpi(event, s3)
-
-    return {
-        "statusCode": 404,
-        "body": json.dumps({"error": "Endpoint not found"})
-    }
-    
-    # return {    
-    #     "statusCode": 200,
-    #     "body": json.dumps({"message": "Hello from Mango microservice!"})
-    # }
+handler = Mangum(app)
