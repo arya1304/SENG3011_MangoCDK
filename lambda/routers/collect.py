@@ -1,19 +1,17 @@
-import json
 import os
 import requests
 from datetime import datetime, timezone
-from fastapi import FastAPI, HTTPException
-from mangum import Mangum
+from fastapi import APIRouter, HTTPException
 import boto3
 
 ABS_API_URL = "https://data.api.abs.gov.au/rest/data"
 BUCKET_NAME = os.environ.get("BUCKET_NAME")
 
-app = FastAPI()
+router = APIRouter(prefix="/collect")
 s3 = boto3.client('s3')
 
-@app.get("/cpi/{dataflowIdentifier}/{dataKey}")
-def get_cpi(
+@router.post("/cpi")
+def collect_cpi(
     dataflowIdentifier: str,
     dataKey: str,
     startPeriod: str = None,
@@ -22,12 +20,7 @@ def get_cpi(
     detail: str = "dataonly"
     ):
     """
-    GET / CPI data from ABS API and return
-    Query parameters:
-    - startPeriod:             e.g., "2023-Q1"
-    - endPeriod:               e.g., "2023-Q4"
-    - format:                   e.g., "json"
-    - detail:                   e.g., "dataonly"
+    POST /collect/cpi to get CPI data from ABS API and return
     """
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
 
@@ -55,4 +48,18 @@ def get_cpi(
 
     return raw
 
-handler = Mangum(app)
+@router.post("/stocks")
+def collect_stocks():
+    """
+    POST /collect/stocks to get stock data from Yahoo Finance API and return
+    """
+    return {"message": "Stock data collected successfully"}
+
+@router.post("/unemployment")
+def collect_unemployment():
+    """
+    POST /collect/unemployment to get unemployment data from ABS API and return
+    """
+    return {"message": "Unemployment data collected successfully"}
+
+
