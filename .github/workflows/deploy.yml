@@ -35,13 +35,5 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: us-east-1
 
-      - name: Build and upload Lambda zip to S3
-        run: |
-          cd lambda
-          pip install -r requirements.txt -t .
-          zip -r ../lambda.zip .
-          cd ..
-          aws s3 cp lambda.zip s3://cdk-assets-083483698371-us-east-1/lambda.zip
-
       - name: Deploy CDK Stack
         run: cdk deploy --require-approval never

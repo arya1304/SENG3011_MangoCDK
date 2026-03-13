@@ -20,21 +20,22 @@ class Seng3011MangoCdkStack(Stack):
             f"arn:aws:iam::{ACCOUNT_ID}:role/LabRole"
         )
 
-        # Your app's shared data bucket
         app_bucket = s3.Bucket.from_bucket_name(self, "MangoSharedBucket",
             f"mango-shared-bucket-{ACCOUNT_ID}"
         )
 
-       
-        assets_bucket = s3.Bucket.from_bucket_name(self, "AssetsBucket",
-            f"cdk-assets-{ACCOUNT_ID}-us-east-1"
-        )
-
-        # uses magnum to wrap all the fastAPI endpoints
         main_function = _lambda.Function(self, "MainFunction",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="main.handler",
-            code=_lambda.Code.from_bucket(assets_bucket, "lambda.zip"),
+            code=_lambda.Code.from_asset("lambda",
+                bundling=cdk.BundlingOptions(
+                    image=_lambda.Runtime.PYTHON_3_11.bundling_image,
+                    command=[
+                        "bash", "-c",
+                        "pip install -r requirements.txt -t /asset-output && cp -au . /asset-output"
+                    ],
+                )
+            ),
             role=lab_role,
             environment={
                 "BUCKET_NAME": app_bucket.bucket_name
