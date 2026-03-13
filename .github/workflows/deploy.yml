@@ -41,6 +41,7 @@ jobs:
       - name: Install Lambda dependencies and upload to S3
         run: |
           cd lambda
+          find . -mindepth 1 -maxdepth 1 ! -name '*.py' ! -name 'requirements.txt' ! -name 'routers' -exec rm -rf {} +
           pip install -r requirements.txt -t .
           zip -r ../lambda.zip .
           cd ..
@@ -48,3 +49,10 @@ jobs:
 
       - name: Deploy CDK stack
         run: cdk deploy --require-approval never
+      
+      - name: Update Lambda function code
+        run: |
+          aws lambda update-function-code \
+            --function-name Seng3011MangoCdkStack-MainFunctionE9DD22DA-68j4sdpsXpiN \
+            --s3-bucket cdk-assets-${{ secrets.AWS_ACCOUNT_ID }}-us-east-1 \
+            --s3-key lambda.zip
