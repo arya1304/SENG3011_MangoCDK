@@ -27,11 +27,14 @@ class Seng3011MangoCdkStack(Stack):
             f"mango-shared-bucket-{account_id}"
         )
 
-        # CDK bundles and uploads lambda/ automatically
+        assets_bucket = s3.Bucket.from_bucket_name(self, "AssetsBucket",
+            f"cdk-assets-{account_id}-us-east-1"
+        )
+
         main_function = _lambda.Function(self, "MainFunction",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="main.handler",
-            code=_lambda.Code.from_asset("lambda"),
+            code=_lambda.Code.from_bucket(assets_bucket, "lambda.zip"),
             role=lab_role,
             timeout=Duration.seconds(30),
             memory_size=256,
@@ -40,11 +43,9 @@ class Seng3011MangoCdkStack(Stack):
             }
         )
 
-        # API Gateway to expose FastAPI routes over HTTP
         api = apigw.LambdaRestApi(self, "MangoApi",
             handler=main_function,
-            proxy=True,  # forwards all routes to FastAPI/Mangum
+            proxy=True,
         )
 
-        # Print the API URL after deploy
         cdk.CfnOutput(self, "ApiUrl", value=api.url)
