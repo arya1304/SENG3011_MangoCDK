@@ -14,7 +14,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.13.12'
+          python-version: '3.11'
 
       - name: Set up Node.js
         uses: actions/setup-node@v3
@@ -35,9 +35,12 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: us-east-1
 
-      - name: Zip and upload Lambda code to S3
+      - name: Build and upload Lambda zip to S3
         run: |
-          zip -j lambda.zip lambda/main.py lambda/cpi.py
+          cd lambda
+          pip install -r requirements.txt -t .
+          zip -r ../lambda.zip .
+          cd ..
           aws s3 cp lambda.zip s3://cdk-assets-083483698371-us-east-1/lambda.zip
 
       - name: Deploy CDK Stack

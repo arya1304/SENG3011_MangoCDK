@@ -25,12 +25,12 @@ class Seng3011MangoCdkStack(Stack):
             f"mango-shared-bucket-{ACCOUNT_ID}"
         )
 
-        # Dedicated assets bucket for Lambda code
+       
         assets_bucket = s3.Bucket.from_bucket_name(self, "AssetsBucket",
             f"cdk-assets-{ACCOUNT_ID}-us-east-1"
         )
 
-        # Lambda loaded from assets bucket
+        # uses magnum to wrap all the fastAPI endpoints
         main_function = _lambda.Function(self, "MainFunction",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="main.handler",
@@ -39,13 +39,4 @@ class Seng3011MangoCdkStack(Stack):
             environment={
                 "BUCKET_NAME": app_bucket.bucket_name
             }
-        )
-
-        # New CPI Lambda
-        cpi_function = _lambda.Function(self, "CpiFunction",
-            runtime=_lambda.Runtime.PYTHON_3_11,
-            handler="cpi.handler",
-            code=_lambda.Code.from_bucket(assets_bucket, "lambda.zip"),
-            role=lab_role,
-            environment={"BUCKET_NAME": app_bucket.bucket_name}
         )
