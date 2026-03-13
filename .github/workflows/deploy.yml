@@ -1,47 +1,49 @@
 name: Deploy CDK Stack
-
+ 
 on:
   push:
     branches:
       - main
-
+ 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # Required for OIDC
+      contents: read
+ 
     steps:
-      - uses: actions/checkout@v3
-
+      - name: Checkout
+        uses: actions/checkout@v4
+ 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
+          cache: 'pip'
+ 
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Install CDK
+ 
+      - name: Install AWS CDK
         run: npm install -g aws-cdk
-
-      - name: Install Python dependencies
+ 
+      - name: Install CDK dependencies
         run: pip install -r requirements.txt
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+ 
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-east-1
-
-      - name: Build and upload Lambda zip to S3
-        run: |
-          cd lambda
-          pip install -r requirements.txt -t .
-          zip -r ../lambda.zip .
-          cd ..
-          aws s3 cp lambda.zip s3://cdk-assets-083483698371-us-east-1/lambda.zip
-
-      - name: Deploy CDK Stack
+ 
+      - name: Install Lambda dependencies
+        run: pip install -r lambda/requirements.txt -t lambda/
+ 
+      - name: Synth CDK stack
+        run: cdk synth
+ 
+      - name: Deploy CDK stack
         run: cdk deploy --require-approval never
