@@ -97,19 +97,7 @@ def preprocess_cpi(dataflowIdentifier: str, dataKey: str):
                 }
             })
 
-    # temporarily seeing what is returned
-    # print(json.dumps({
-    #     "data_source": "Australian Bureau of Statistics (ABS)",
-    #     "dataset_type": "Government Economic Indicator",
-    #     "dataset_id": f"https://data.api.abs.gov.au/rest/data/{dataflowIdentifier}/{dataKey}",
-    #     "time_object": {
-    #         "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f"),
-    #         "timezone": "GMT+11"
-    #     },
-    #     "events": events
-    # }, indent=2)) 
-
-    return {
+    result = {
         "data_source": "Australian Bureau of Statistics (ABS)",
         "dataset_type": "Government Economic Indicator",
         "dataset_id": f"https://data.api.abs.gov.au/rest/data/{dataflowIdentifier}/{dataKey}",
@@ -119,6 +107,16 @@ def preprocess_cpi(dataflowIdentifier: str, dataKey: str):
         },
         "events": events
     }
+
+    # save preprocessed data back to S3
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
+    s3.put_object(
+        Bucket=BUCKET_NAME,
+        Key=f"preprocessed/{dataflowIdentifier}/{dataKey}/{timestamp}.json",
+        Body=json.dumps(result)
+    )
+
+    return result
 
 @router.post("/gdp")
 def preprocess_gdp():
