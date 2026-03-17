@@ -35,8 +35,6 @@ class Seng3011MangoCdkStack(Stack):
 
         cpi_table = dynamodb.Table(
             self, "CpiTable",
-            table_name="cpi-data",
-
             partition_key=dynamodb.Attribute(
                 name="dataset_id",
                 type=dynamodb.AttributeType.STRING
