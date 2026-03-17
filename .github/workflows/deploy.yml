@@ -45,7 +45,7 @@ jobs:
           pip install -r requirements.txt -t .
           zip -r ../lambda.zip .
           cd ..
-          aws s3 cp lambda.zip s3://cdk-assets-${{ secrets.AWS_ACCOUNT_ID }}-us-east-1/lambda.zip
+          aws s3 cp lambda.zip s3://mango-shared-bucket-${{ secrets.AWS_ACCOUNT_ID }}/lambda.zip
 
       - name: Deploy CDK stack
         run: cdk deploy --require-approval never --no-asset-metadata
@@ -54,5 +54,5 @@ jobs:
         run: |
           aws lambda update-function-code \
             --function-name Seng3011MangoCdkStack-MainFunctionE9DD22DA-68j4sdpsXpiN \
-            --s3-bucket cdk-assets-${{ secrets.AWS_ACCOUNT_ID }}-us-east-1 \
+            --s3-bucket mango-shared-bucket-${{ secrets.AWS_ACCOUNT_ID }} \
             --s3-key lambda.zip
