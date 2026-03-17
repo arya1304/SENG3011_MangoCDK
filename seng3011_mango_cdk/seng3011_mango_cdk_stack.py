@@ -38,7 +38,7 @@ class Seng3011MangoCdkStack(Stack):
             table_name="cpi-data",
 
             partition_key=dynamodb.Attribute(
-                name="region",
+                name="dataset_id",
                 type=dynamodb.AttributeType.STRING
             ),
 
