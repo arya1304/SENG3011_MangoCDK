@@ -48,7 +48,7 @@ jobs:
           aws s3 cp lambda.zip s3://cdk-assets-${{ secrets.AWS_ACCOUNT_ID }}-us-east-1/lambda.zip
 
       - name: Deploy CDK stack
-        run: cdk deploy --require-approval never
+        run: cdk deploy --require-approval never --no-asset-metadata
       
       - name: Update Lambda function code
         run: |
