@@ -1,6 +1,7 @@
 import json
 import os
 from datetime import datetime, timezone
+from decimal import Decimal
 import boto3
 from fastapi import APIRouter, HTTPException
 
@@ -138,12 +139,9 @@ def preprocess_unemployment():
 
 @router.post("/clean")
 def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
-    """
-    POST /preprocess/clean to clean the data and return
-    """
     if not BUCKET_NAME:
         raise HTTPException(status_code=500, detail="Server configuration error: BUCKET_NAME not set")
-
+    
     # find the latest preprocessed cpi file
     prefix = f"preprocessed/{dataflowIdentifier}/{dataKey}/"
     listing = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
@@ -157,23 +155,31 @@ def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
     dataset_id = raw.get("dataset_id")
     data_source = raw.get("data_source")
 
+    events = raw.get("events", [])
+    if not events:
+        raise HTTPException(status_code=404, detail="No events found in preprocessed data")
+    
     # loop through the events of the data model and store it inside the db
-    for event in raw.get("events", []):
+    for event in events:
         attribute = event.get("attribute", {})
 
+        time_period = attribute.get("time_period", "")
+        parts = time_period.split("-")
+        obs_value = attribute.get("obs_value")
+
         each_row = {
-            "region": attribute.get("region"),  
-            "time_period": attribute.get("time_period"), 
-            "year": attribute.get("time_period").split("-")[0], 
-            "quarter" :  attribute.get("time_period").split("-")[1],
+            "region": attribute.get("region"),
+            "time_period": time_period,
+            "year": parts[0] if len(parts) > 0 else None,
+            "quarter": parts[1] if len(parts) > 1 else None,
             "dataset_id": dataset_id,
-            "obs_value": float(attribute.get("obs_value", 0)),
+            "obs_value": Decimal(str(obs_value)) if obs_value is not None else None,  
             "obs_status": attribute.get("obs_status"),
             "freq": attribute.get("freq"),
             "unit_measure": attribute.get("unit_measure"),
             "data_source": data_source,
         }
-    
-    table.put_item(Item=each_row)
+
+        table.put_item(Item=each_row)  
 
     return {"data": raw}
