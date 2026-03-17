@@ -1,14 +1,15 @@
 import json
 import os
 from datetime import datetime, timezone
-
 import boto3
 from fastapi import APIRouter, HTTPException
 
 BUCKET_NAME = os.environ.get("BUCKET_NAME")
 
 router = APIRouter(prefix="/preprocess")
+
 s3 = boto3.client('s3')
+table = boto3.resource('dynamodb').Table(os.environ['TABLE_NAME'])
 
 @router.post("/cpi")
 def preprocess_cpi(dataflowIdentifier: str, dataKey: str):
@@ -132,9 +133,25 @@ def preprocess_unemployment():
     """
     return {"message": "Preprocessing completed"}
 
+
+
+
 @router.post("/clean")
-def preprocess_clean():
+def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
     """
     POST /preprocess/clean to clean the data and return
     """
+    if not BUCKET_NAME:
+        raise HTTPException(status_code=500, detail="Server configuration error: BUCKET_NAME not set")
+
+    # find the latest preprocessed cpi file
+    prefix = f"preprocessed/{dataflowIdentifier}/{dataKey}/"
+    listing = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
+
+    if 'Contents' not in listing or not listing['Contents']:
+        raise HTTPException(status_code=404, detail=f"No Preprocessed CPI data found at s3://{BUCKET_NAME}/{prefix}")
+
+    latest_key = sorted(listing['Contents'], key=lambda x: x['LastModified'], reverse=True)[0]['Key']
+    raw = json.loads(s3.get_object(Bucket=BUCKET_NAME, Key=latest_key)['Body'].read())
+
     return {"message": "Data cleaning completed"}

@@ -2,10 +2,12 @@ import aws_cdk as cdk
 from aws_cdk import (
     Stack,
     Duration,
+    RemovalPolicy,
     aws_lambda as _lambda,
     aws_apigateway as apigw,
     aws_s3 as s3,
     aws_iam as iam,
+    aws_dynamodb as dynamodb,
 )
 from constructs import Construct
 
@@ -31,6 +33,24 @@ class Seng3011MangoCdkStack(Stack):
             f"cdk-assets-{account_id}-us-east-1"
         )
 
+        cpi_table = dynamodb.Table(
+            self, "CpiTable",
+            table_name="cpi-data",
+
+            partition_key=dynamodb.Attribute(
+                name="region",
+                type=dynamodb.AttributeType.STRING
+            ),
+
+            sort_key=dynamodb.Attribute(
+                name="time_period",
+                type=dynamodb.AttributeType.STRING
+            ),
+
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.DESTROY
+        )
+
         main_function = _lambda.Function(self, "MainFunction",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="main.handler",
@@ -39,7 +59,8 @@ class Seng3011MangoCdkStack(Stack):
             timeout=Duration.seconds(30),
             memory_size=256,
             environment={
-                "BUCKET_NAME": app_bucket.bucket_name
+                "BUCKET_NAME": app_bucket.bucket_name,
+                "TABLE_NAME": cpi_table.table_name
             }
         )
 
