@@ -154,4 +154,26 @@ def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
     latest_key = sorted(listing['Contents'], key=lambda x: x['LastModified'], reverse=True)[0]['Key']
     raw = json.loads(s3.get_object(Bucket=BUCKET_NAME, Key=latest_key)['Body'].read())
 
-    return {"message": "Data cleaning completed"}
+    dataset_id = raw.get("dataset_id")
+    data_source = raw.get("data_source")
+
+    # loop through the events of the data model and store it inside the db
+    for event in raw.get("events", []):
+        attribute = event.get("attribute", {})
+
+        each_row = {
+            "region": attribute.get("region"),  
+            "time_period": attribute.get("time_period"), 
+            "year": attribute.get("time_period").split("-")[0], 
+            "quarter" :  attribute.get("time_period").split("-")[1],
+            "dataset_id": dataset_id,
+            "obs_value": float(attribute.get("obs_value", 0)),
+            "obs_status": attribute.get("obs_status"),
+            "freq": attribute.get("freq"),
+            "unit_measure": attribute.get("unit_measure"),
+            "data_source": data_source,
+        }
+    
+    table.put_item(Item=each_row)
+
+    return {"data": raw}
