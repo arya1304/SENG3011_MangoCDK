@@ -29,10 +29,6 @@ class Seng3011MangoCdkStack(Stack):
             f"mango-shared-bucket-{account_id}"
         )
 
-        assets_bucket = s3.Bucket.from_bucket_name(self, "AssetsBucket",
-            f"cdk-assets-{account_id}-us-east-1"
-        )
-
         cpi_table = dynamodb.Table(
             self, "CpiTable",
             partition_key=dynamodb.Attribute(
@@ -52,7 +48,7 @@ class Seng3011MangoCdkStack(Stack):
         main_function = _lambda.Function(self, "MainFunction",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="main.handler",
-            code=_lambda.Code.from_bucket(assets_bucket, "lambda.zip"),
+            code=_lambda.Code.from_bucket(app_bucket, "lambda.zip"),
             role=lab_role,
             timeout=Duration.seconds(30),
             memory_size=256,
