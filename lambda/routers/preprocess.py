@@ -240,9 +240,52 @@ def preprocess_unemployment():
     """
     return {"message": "Preprocessing completed"}
 
+
+
+
 @router.post("/clean")
-def preprocess_clean():
-    """
-    POST /preprocess/clean to clean the data and return
-    """
-    return {"message": "Data cleaning completed"}
+def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
+    if not BUCKET_NAME:
+        raise HTTPException(status_code=500, detail="Server configuration error: BUCKET_NAME not set")
+    
+    # find the latest preprocessed cpi file
+    prefix = f"preprocessed/{dataflowIdentifier}/{dataKey}/"
+    listing = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
+
+    if 'Contents' not in listing or not listing['Contents']:
+        raise HTTPException(status_code=404, detail=f"No Preprocessed CPI data found at s3://{BUCKET_NAME}/{prefix}")
+
+    latest_key = sorted(listing['Contents'], key=lambda x: x['LastModified'], reverse=True)[0]['Key']
+    raw = json.loads(s3.get_object(Bucket=BUCKET_NAME, Key=latest_key)['Body'].read())
+
+    dataset_id = raw.get("dataset_id")
+    data_source = raw.get("data_source")
+
+    events = raw.get("events", [])
+    if not events:
+        raise HTTPException(status_code=404, detail="No events found in preprocessed data")
+    
+    # loop through the events of the data model and store it inside the db
+    for event in events:
+        attribute = event.get("attribute", {})
+
+        time_period = attribute.get("time_period", "")
+        parts = time_period.split("-")
+        obs_value = attribute.get("obs_value")
+
+        each_row = {
+            "region": attribute.get("region"),
+            "time_period": time_period,
+            "year": parts[0] if len(parts) > 0 else None,
+            "quarter": parts[1] if len(parts) > 1 else None,
+            "dataset_id": dataset_id,
+            "obs_value": Decimal(str(obs_value)) if obs_value is not None else None,  
+            "obs_status": attribute.get("obs_status"),
+            "freq": attribute.get("freq"),
+            "unit_measure": attribute.get("unit_measure"),
+            "data_source": data_source,
+        }
+
+        table.put_item(Item=each_row)  
+
+    return {"data": raw}
