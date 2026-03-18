@@ -244,7 +244,7 @@ def preprocess_unemployment(dataflowIdentifier: str, dataKey: str):
     if not BUCKET_NAME:
         raise HTTPException(status_code=500, detail="Server configuration error: BUCKET_NAME not set")
 
-    prefix = f"preprocessed/{dataflowIdentifier}/{dataKey}/"
+    prefix = f"{dataflowIdentifier}/{dataKey}/"
     listing = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
 
     if 'Contents' not in listing or not listing['Contents']:
@@ -314,7 +314,7 @@ def preprocess_unemployment(dataflowIdentifier: str, dataKey: str):
             time_period = obs_dim_values[obs_idx].get('id', str(obs_idx)) if obs_idx < len(obs_dim_values) else str(obs_idx)
             value = obs_val[0] if obs_val else None
 
-    events.append({
+            events.append({
                 "time_object": {
                     "timestamp": time_period,
                     "duration": 1,
@@ -325,7 +325,7 @@ def preprocess_unemployment(dataflowIdentifier: str, dataKey: str):
                 "attribute": {
                     "dataflow": dataflow_str,
                     "measure": measure,
-                    "serx": sex,
+                    "sex": sex,
                     "age": age,
                     "adjustment_type": tsest,
                     "region": region,
@@ -342,7 +342,7 @@ def preprocess_unemployment(dataflowIdentifier: str, dataKey: str):
         "dataset_type": "Government Economic Indicator",
         "dataset_id": f"https://data.api.abs.gov.au/rest/data/{dataflowIdentifier}/{dataKey}",
         "time_object": {
-            "timestamp": timestamp,
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f"),
             "timezone": "GMT+11"
         },
         "events": events
