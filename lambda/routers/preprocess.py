@@ -292,6 +292,23 @@ def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
         cpi_table.put_item(Item=each_row)  
 
     # GDP
+    # find the latest preprocessed gdp file
+    gdp_prefix = f"preprocessed/ABS,ANA_IND_GVA,1.0.0/......Q/"
+    gdp_listing = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=gdp_prefix)
+
+    if 'Contents' not in gdp_listing or not gdp_listing['Contents']:
+        raise HTTPException(status_code=404, detail=f"No Preprocessed GDP data found at s3://{BUCKET_NAME}/{prefix}")
+
+    gdp_latest_key = sorted(listing['Contents'], key=lambda x: x['LastModified'], reverse=True)[0]['Key']
+    gdp_raw = json.loads(s3.get_object(Bucket=BUCKET_NAME, Key=gdp_latest_key)['Body'].read())
+
+    gdp_dataset_id = gdp_raw.get("dataset_id")
+    gdp_data_source = gdp_raw.get("data_source")
+
+    events = gdp_raw.get("events", [])
+    if not events:
+        raise HTTPException(status_code=404, detail="No events found in preprocessed data")
+    
     for event in events:
         attribute = event.get("attribute", {})
 
@@ -300,6 +317,8 @@ def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
         obs_value = attribute.get("obs_value")
 
         each_row = {
+            "dataset_id": gdp_dataset_id,
+            "data_source": gdp_data_source,
             "year": parts[0] if len(parts) > 0 else None,
             "quarter": parts[1] if len(parts) > 1 else None,
             "industry": attribute.get("industry"),
