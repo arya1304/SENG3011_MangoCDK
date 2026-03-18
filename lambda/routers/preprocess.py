@@ -1,12 +1,11 @@
 import json
 import os
 from datetime import datetime, timezone
-from decimal import Decimal
+
 import boto3
 from fastapi import APIRouter, HTTPException
 
 BUCKET_NAME = os.environ.get("BUCKET_NAME")
-
 router = APIRouter(prefix="/preprocess")
 
 s3 = boto3.client('s3')
@@ -127,7 +126,115 @@ def preprocess_gdp():
     """
     POST /preprocess/gdp to preprocess GDP data and return
     """
-    return {"message": "Preprocessing completed"}
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
+
+    # transforms ABS raw GDP data -> standardised model
+    if not BUCKET_NAME:
+        raise HTTPException(status_code=500, detail="Server configuration error: BUCKET_NAME not set")
+
+    dataflowIdentifier = "ABS,ANA_IND_GVA,1.0.0"
+    dataKey = "......Q"
+
+    # find the latest file under {dataflowIdentifier}/{dataKey}/
+    prefix = f"{dataflowIdentifier}/{dataKey}/"
+    listing = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
+
+    if 'Contents' not in listing or not listing['Contents']:
+        raise HTTPException(status_code=404, detail=f"No CPI data found at s3://{BUCKET_NAME}/{prefix}")
+
+    latest_key = sorted(listing['Contents'], key=lambda x: x['LastModified'], reverse=True)[0]['Key']
+    raw = json.loads(s3.get_object(Bucket=BUCKET_NAME, Key=latest_key)['Body'].read())
+
+    # parse raw JSON structure
+    structures = raw.get('data', {}).get('structures', [])
+    datasets = raw.get('data', {}).get('dataSets', [])
+
+    if not structures or not datasets:
+        raise HTTPException(status_code=500, detail="Unexpected SDMX-JSON format in stored file")
+
+    structure = structures[0]
+    dataset = datasets[0]
+    
+    # build dimension lookup table
+    dimensions = {}
+    for dim in structure["dimensions"]["observation"]:
+        position = dim["keyPosition"]
+        dimensions[position] = {
+            i: v["id"] for i, v in enumerate(dim["values"])
+        }
+    
+    # build attribute lookup table
+    attributes = {}
+    for i, attr in enumerate(structure["attributes"]["observation"]):
+        attributes[i] = {
+            j: v["id"] for j, v in enumerate(attr["values"])
+        }
+
+    events = []
+    for obs_key, obs_value in dataset["observations"].items():
+        obs_indices = [int(i) for i in obs_key.split(":")]
+
+        measure     = dimensions[0][obs_indices[0]]
+        data_item   = dimensions[1][obs_indices[1]]
+        sector      = dimensions[2][obs_indices[2]]
+        tsest       = dimensions[3][obs_indices[3]]
+        industry    = dimensions[4][obs_indices[4]]
+        region      = dimensions[5][obs_indices[5]]
+        freq        = dimensions[6][obs_indices[6]]
+        time_period = dimensions[7][obs_indices[7]]
+
+        value = obs_value[0]
+        unit_measure = attributes[0].get(obs_value[1]) if obs_value[1] is not None else None
+        unit_mult    = attributes[1].get(obs_value[2]) if obs_value[2] is not None else None
+        obs_status   = attributes[2].get(obs_value[3]) if obs_value[3] is not None else None
+
+        events.append({
+            "time_object": {
+                "timestamp": time_period,
+                "duration": 1,
+                "duration_unit": "quarter",
+                "timezone": "GMT+11"
+            },
+            "event_type": "gdp_observation",
+            "attribute": {
+                "dataflow": "ABS:ANA_IND_GVA(1.0.0)",
+                "measure": measure,
+                "data_item": data_item,
+                "sector": sector,
+                "adjustment_type": tsest,
+                "industry": industry,
+                "region": region,
+                "freq": freq,
+                "time_period": time_period,
+                "obs_value": value,
+                "unit_measure": unit_measure,
+                "unit_mult": unit_mult,
+                "obs_status": obs_status,
+            }
+        })
+
+    result = {
+        "data_source": "Australian Bureau of Statistics (ABS)",
+        "dataset_type": "Government Economic Indicator",
+        "dataset_id": f"https://data.api.abs.gov.au/rest/data/{dataflowIdentifier}/{dataKey}",
+        "time_object": {
+            "timestamp": timestamp,
+            "timezone": "GMT+11"
+        },
+        "events": events
+    }
+
+
+    # send preprocessed data back to S3
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
+    s3.put_object(
+        Bucket=BUCKET_NAME,
+        Key=f"preprocessed/{dataflowIdentifier}/{dataKey}/{timestamp}.json",
+        Body=json.dumps(result)
+    )
+
+    return result
 
 @router.post("/unemployment")
 def preprocess_unemployment():
