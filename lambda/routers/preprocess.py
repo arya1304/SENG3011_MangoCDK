@@ -241,6 +241,8 @@ def preprocess_unemployment():
     """
     POST /preprocess/unemployment to preprocess unemployment data and return
     """
+    if not BUCKET_NAME:
+        raise HTTPException(status_code=500, detail="Server configuration error: BUCKET_NAME not set")
     return {"message": "Preprocessing completed"}
 
 
