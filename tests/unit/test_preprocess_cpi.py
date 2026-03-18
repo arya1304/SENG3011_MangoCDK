@@ -11,6 +11,7 @@ os.environ["AWS_SECURITY_TOKEN"] = "testing"
 os.environ["AWS_SESSION_TOKEN"] = "testing"
 os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 os.environ["BUCKET_NAME"] = "test-bucket"
+os.environ["TABLE_NAME"] = "test-table"
 
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../lambda"))
@@ -202,14 +203,14 @@ def test_preprocess_cpi_no_data():
 
 
 def test_preprocess_cpi_missing_params():
-    """Should return 422 when query params are missing"""
+    # hould return 422 when query params are missing
     response = client.post("/preprocess/cpi")
     assert response.status_code == 422
 
 
 @mock_aws
 def test_preprocess_cpi_invalid_sdmx_format():
-    """Should return 500 when S3 file has bad structure"""
+    # should return 500 when S3 file has bad structure
     s3 = boto3.client("s3", region_name="us-east-1")
     preprocess_module.s3 = s3
     s3.create_bucket(Bucket="test-bucket")
@@ -222,3 +223,150 @@ def test_preprocess_cpi_invalid_sdmx_format():
     response = client.post("/preprocess/cpi?dataflowIdentifier=ABS,CPI,1.0.0&dataKey=1.AUS.Q")
     assert response.status_code == 500
     assert "Unexpected SDMX-JSON" in response.json()["detail"]
+
+
+@mock_aws
+def test_preprocess_cpi_empty_observation_value():
+    # should handle empty observation arrays gracefully (obs_value = None)
+    sdmx = {
+        "data": {
+            "structures": [{"dimensions": {
+                "series": [
+                    {"id": "MEASURE", "values": [{"id": "1"}]},
+                    {"id": "REGION", "values": [{"id": "AUS"}]},
+                    {"id": "FREQ", "values": [{"id": "Q"}]}
+                ],
+                "observation": [{"id": "TIME_PERIOD", "values": [{"id": "2024-Q1"}]}]
+            }}],
+            "dataSets": [{"series": {"0:0:0": {"observations": {"0": []}}}}]
+        }
+    }
+
+    s3 = boto3.client("s3", region_name="us-east-1")
+    preprocess_module.s3 = s3
+    s3.create_bucket(Bucket="test-bucket")
+    s3.put_object(
+        Bucket="test-bucket",
+        Key="ABS,CPI,1.0.0/1.AUS.Q/2024-01-01T00-00-00Z.json",
+        Body=json.dumps(sdmx)
+    )
+
+    response = client.post("/preprocess/cpi?dataflowIdentifier=ABS,CPI,1.0.0&dataKey=1.AUS.Q")
+    assert response.status_code == 200
+    assert response.json()["events"][0]["attribute"]["obs_value"] is None
+
+
+@mock_aws
+def test_preprocess_cpi_no_observation_dimensions():
+    # should handle missing observation dimensions (obs_dims is empty)
+    sdmx = {
+        "data": {
+            "structures": [{"dimensions": {
+                "series": [
+                    {"id": "MEASURE", "values": [{"id": "1"}]},
+                    {"id": "REGION", "values": [{"id": "AUS"}]},
+                    {"id": "FREQ", "values": [{"id": "Q"}]}
+                ],
+                "observation": []
+            }}],
+            "dataSets": [{"series": {"0:0:0": {"observations": {"0": [100.0]}}}}]
+        }
+    }
+
+    s3 = boto3.client("s3", region_name="us-east-1")
+    preprocess_module.s3 = s3
+    s3.create_bucket(Bucket="test-bucket")
+    s3.put_object(
+        Bucket="test-bucket",
+        Key="ABS,CPI,1.0.0/1.AUS.Q/2024-01-01T00-00-00Z.json",
+        Body=json.dumps(sdmx)
+    )
+
+    response = client.post("/preprocess/cpi?dataflowIdentifier=ABS,CPI,1.0.0&dataKey=1.AUS.Q")
+    assert response.status_code == 200
+    # with no obs_dims, time_period falls back to str(obs_idx)
+    assert response.json()["events"][0]["attribute"]["time_period"] == "0"
+
+
+@mock_aws
+def test_preprocess_cpi_saves_to_s3():
+    # should save preprocessed result back to S3 under preprocessed prefix
+    s3 = boto3.client("s3", region_name="us-east-1")
+    preprocess_module.s3 = s3
+    s3.create_bucket(Bucket="test-bucket")
+    s3.put_object(
+        Bucket="test-bucket",
+        Key="ABS,CPI,1.0.0/1.AUS.Q/2024-01-01T00-00-00Z.json",
+        Body=json.dumps(MOCK_SDMX)
+    )
+
+    response = client.post("/preprocess/cpi?dataflowIdentifier=ABS,CPI,1.0.0&dataKey=1.AUS.Q")
+    assert response.status_code == 200
+
+    # verify preprocessed file was saved to S3
+    listing = s3.list_objects_v2(Bucket="test-bucket", Prefix="preprocessed/ABS,CPI,1.0.0/1.AUS.Q/")
+    assert "Contents" in listing
+    assert len(listing["Contents"]) == 1
+
+    saved = json.loads(s3.get_object(Bucket="test-bucket", Key=listing["Contents"][0]["Key"])["Body"].read())
+    assert saved["data_source"] == "Australian Bureau of Statistics (ABS)"
+    assert len(saved["events"]) == 2
+
+
+@mock_aws
+def test_preprocess_cpi_monthly_frequency():
+    """Should map monthly freq to 'month' duration unit"""
+    sdmx = {
+        "data": {
+            "structures": [{"dimensions": {
+                "series": [
+                    {"id": "MEASURE", "values": [{"id": "1"}]},
+                    {"id": "REGION", "values": [{"id": "AUS"}]},
+                    {"id": "FREQ", "values": [{"id": "M"}]}
+                ],
+                "observation": [{"id": "TIME_PERIOD", "values": [{"id": "2024-01"}]}]
+            }}],
+            "dataSets": [{"series": {"0:0:0": {"observations": {"0": [110.5]}}}}]
+        }
+    }
+
+    s3 = boto3.client("s3", region_name="us-east-1")
+    preprocess_module.s3 = s3
+    s3.create_bucket(Bucket="test-bucket")
+    s3.put_object(
+        Bucket="test-bucket",
+        Key="ABS,CPI,1.0.0/1.AUS.M/2024-01-01T00-00-00Z.json",
+        Body=json.dumps(sdmx)
+    )
+
+    response = client.post("/preprocess/cpi?dataflowIdentifier=ABS,CPI,1.0.0&dataKey=1.AUS.M")
+    assert response.status_code == 200
+    assert response.json()["events"][0]["time_object"]["duration_unit"] == "month"
+
+
+@mock_aws
+def test_preprocess_cpi_picks_latest_file():
+    # when multiple files exist, should use the most recent one
+    s3 = boto3.client("s3", region_name="us-east-1")
+    preprocess_module.s3 = s3
+    s3.create_bucket(Bucket="test-bucket")
+
+    old_sdmx = json.loads(json.dumps(MOCK_SDMX))
+    old_sdmx["data"]["dataSets"][0]["series"]["0:0:0"]["observations"]["0"] = [100.0]
+    s3.put_object(
+        Bucket="test-bucket",
+        Key="ABS,CPI,1.0.0/1.AUS.Q/2023-01-01T00-00-00Z.json",
+        Body=json.dumps(old_sdmx)
+    )
+    import time
+    # brute forced a small delay so "LastModified" field is not identical
+    time.sleep(1)
+    s3.put_object(
+        Bucket="test-bucket",
+        Key="ABS,CPI,1.0.0/1.AUS.Q/2024-06-01T00-00-00Z.json",
+        Body=json.dumps(MOCK_SDMX)
+    )
+
+    response = client.post("/preprocess/cpi?dataflowIdentifier=ABS,CPI,1.0.0&dataKey=1.AUS.Q")
+    assert response.status_code == 200
+    assert response.json()["events"][0]["attribute"]["obs_value"] == 136.1
