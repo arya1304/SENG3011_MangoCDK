@@ -45,6 +45,38 @@ class Seng3011MangoCdkStack(Stack):
             removal_policy=RemovalPolicy.DESTROY
         )
 
+        unemployment_table = dynamodb.Table(
+            self, "UnemploymentTable",
+            partition_key=dynamodb.Attribute(
+                name="dataset_id",
+                type=dynamodb.AttributeType.STRING
+            ),
+
+            sort_key=dynamodb.Attribute(
+                name="time_period",
+                type=dynamodb.AttributeType.STRING
+            ),
+
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.DESTROY
+        )
+
+        gdp_table = dynamodb.Table(
+            self, "GdpTable",
+            partition_key=dynamodb.Attribute(
+                name="dataset_id",
+                type=dynamodb.AttributeType.STRING
+            ),
+
+            sort_key=dynamodb.Attribute(
+                name="time_period",
+                type=dynamodb.AttributeType.STRING
+            ),
+
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.DESTROY
+        )
+
         main_function = _lambda.Function(self, "MainFunction",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="main.handler",
@@ -54,7 +86,9 @@ class Seng3011MangoCdkStack(Stack):
             memory_size=256,
             environment={
                 "BUCKET_NAME": app_bucket.bucket_name,
-                "TABLE_NAME": cpi_table.table_name
+                "CPI_TABLE_NAME": cpi_table.table_name,
+                "UNEMPLOYMENT_TABLE_NAME": unemployment_table.table_name,
+                "GDP_TABLE_NAME": gdp_table.table_name
             }
         )
 

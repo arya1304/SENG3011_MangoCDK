@@ -10,7 +10,9 @@ BUCKET_NAME = os.environ.get("BUCKET_NAME")
 router = APIRouter(prefix="/preprocess")
 
 s3 = boto3.client('s3')
-table = boto3.resource('dynamodb').Table(os.environ['TABLE_NAME'])
+cpi_table = boto3.resource('dynamodb').Table(os.environ['CPI_TABLE_NAME'])
+unemployment_table = boto3.resource('dynamodb').Table(os.environ['UNEMPLOYMENT_TABLE_NAME'])
+gdp_table = boto3.resource('dynamodb').Table(os.environ['GDP_TABLE_NAME'])
 
 @router.post("/cpi")
 def preprocess_cpi(dataflowIdentifier: str, dataKey: str):
@@ -135,8 +137,6 @@ def preprocess_unemployment():
     return {"message": "Preprocessing completed"}
 
 
-
-
 @router.post("/clean")
 def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
     if not BUCKET_NAME:
@@ -160,6 +160,8 @@ def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
         raise HTTPException(status_code=404, detail="No events found in preprocessed data")
     
     # loop through the events of the data model and store it inside the db
+
+    # CPI
     for event in events:
         attribute = event.get("attribute", {})
 
@@ -180,6 +182,28 @@ def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
             "data_source": data_source,
         }
 
-        table.put_item(Item=each_row)  
+        cpi_table.put_item(Item=each_row)  
 
+    # GDP
+    for event in events:
+        attribute = event.get("attribute", {})
+
+        time_period = attribute.get("time_period", "")
+        parts = time_period.split("-")
+        obs_value = attribute.get("obs_value")
+
+        each_row = {
+            "year": parts[0] if len(parts) > 0 else None,
+            "quarter": parts[1] if len(parts) > 1 else None,
+            "industry": attribute.get("industry"),
+            "region": attribute.get("region"),
+            "time_period": attribute.get("time_period"),
+            "obs_value": attribute.get("obs_value"),
+            "data_item": attribute.get("data_item"),
+            "adjustment_type": attribute.get("adjustment_type"),
+            "obs_status":attribute.get("obs_status"),
+        }
+        gdp_table.put_item(Item=each_row)  
+    
+    
     return {"data": raw}
