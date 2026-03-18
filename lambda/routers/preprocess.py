@@ -293,7 +293,7 @@ def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
 
     # GDP
     # find the latest preprocessed gdp file
-    gdp_prefix = f"preprocessed/ABS,ANA_IND_GVA,1.0.0/......Q/"
+    gdp_prefix = "preprocessed/ABS,ANA_IND_GVA,1.0.0/......Q/"
     gdp_listing = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=gdp_prefix)
 
     if 'Contents' not in gdp_listing or not gdp_listing['Contents']:

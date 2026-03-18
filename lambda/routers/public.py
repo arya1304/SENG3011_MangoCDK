@@ -1,6 +1,5 @@
 import os
 import boto3
-from boto3.dynamodb.conditions import Attr
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter(prefix="/public")
