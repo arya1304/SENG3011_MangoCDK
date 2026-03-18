@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 import boto3
 
 ABS_API_URL = "https://data.api.abs.gov.au/rest/data"
-# BUCKET_NAME = os.environ.get("BUCKET_NAME")
+BUCKET_NAME = os.environ.get("BUCKET_NAME")
 
 router = APIRouter(prefix="/collect")
 s3 = boto3.client('s3')
@@ -64,8 +64,8 @@ def collect_gdp(
 
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
 
-    # if not BUCKET_NAME:
-    #     raise HTTPException(status_code=500, detail="Server configuration error: BUCKET_NAME not set")
+    if not BUCKET_NAME:
+        raise HTTPException(status_code=500, detail="Server configuration error: BUCKET_NAME not set")
     
     abs_query_params = {
         "format": response_format,
@@ -85,7 +85,7 @@ def collect_gdp(
     
     raw = response.json()
     
-    # s3.put_object(Bucket=BUCKET_NAME, Key=f"{dataflowIdentifier}/{dataKey}/{timestamp}.json", Body=response.content)
+    s3.put_object(Bucket=BUCKET_NAME, Key=f"{dataflowIdentifier}/{dataKey}/{timestamp}.json", Body=response.content)
 
     return raw
 
