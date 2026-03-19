@@ -407,7 +407,7 @@ def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
 
         cpi_table.put_item(Item=each_row)  
 
-    return {"data": raw}
+    return {"message": "success"}
 
 @router.post("/cleanGdp")
 def preprocess_clean_gdp(dataflowIdentifier: str, dataKey: str):
@@ -452,7 +452,7 @@ def preprocess_clean_gdp(dataflowIdentifier: str, dataKey: str):
         gdp_table.put_item(Item=each_row)  
     
     
-    return {"data": gdp_raw}
+    return {"message": "success"}
 
 
 
@@ -497,4 +497,4 @@ def preprocess_clean_unemployment(dataflowIdentifier: str, dataKey: str):
         unemployment_table.put_item(Item=each_row)  
     
     
-    return {"data": unemployment_raw}
+    return {"message": "success"}
