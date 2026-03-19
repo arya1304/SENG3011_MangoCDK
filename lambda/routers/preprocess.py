@@ -407,47 +407,6 @@ def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
 
         cpi_table.put_item(Item=each_row)  
 
-    # # GDP
-    # # find the latest preprocessed gdp file
-    # gdp_prefix = "preprocessed/ABS,ANA_IND_GVA,1.0.0/......Q/"
-    # gdp_listing = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=gdp_prefix)
-
-    # if 'Contents' not in gdp_listing or not gdp_listing['Contents']:
-    #     raise HTTPException(status_code=404, detail=f"No Preprocessed GDP data found at s3://{BUCKET_NAME}/{prefix}")
-
-    # gdp_latest_key = sorted(listing['Contents'], key=lambda x: x['LastModified'], reverse=True)[0]['Key']
-    # gdp_raw = json.loads(s3.get_object(Bucket=BUCKET_NAME, Key=gdp_latest_key)['Body'].read())
-
-    # gdp_dataset_id = gdp_raw.get("dataset_id")
-    # gdp_data_source = gdp_raw.get("data_source")
-
-    # events = gdp_raw.get("events", [])
-    # if not events:
-    #     raise HTTPException(status_code=404, detail="No events found in preprocessed data")
-    
-    # for event in events:
-    #     attribute = event.get("attribute", {})
-
-    #     time_period = attribute.get("time_period", "")
-    #     parts = time_period.split("-")
-    #     obs_value = attribute.get("obs_value")
-
-    #     each_row = {
-    #         "dataset_id": gdp_dataset_id,
-    #         "data_source": gdp_data_source,
-    #         "year": parts[0] if len(parts) > 0 else None,
-    #         "quarter": parts[1] if len(parts) > 1 else None,
-    #         "industry": attribute.get("industry"),
-    #         "region": attribute.get("region"),
-    #         "time_period": attribute.get("time_period"),
-    #         "obs_value": attribute.get("obs_value"),
-    #         "data_item": attribute.get("data_item"),
-    #         "adjustment_type": attribute.get("adjustment_type"),
-    #         "obs_status":attribute.get("obs_status"),
-    #     }
-    #     gdp_table.put_item(Item=each_row)  
-    
-    
     return {"data": raw}
 
 @router.post("/cleanGdp")
@@ -522,7 +481,7 @@ def preprocess_clean_unemployment(dataflowIdentifier: str, dataKey: str):
 
         time_period = attribute.get("time_period", "")
         parts = time_period.split("-")
-
+        obs_value = attribute.get("obs_value")
         each_row = {
             "dataset_id": unemployment_dataset_id,
             "data_source": unemployment_data_source,
@@ -530,6 +489,7 @@ def preprocess_clean_unemployment(dataflowIdentifier: str, dataKey: str):
             "year": parts[0] if len(parts) > 0 else None,
             "sex": attribute.get("sex"),
             "age":  attribute.get("age"),
+            "obs_value": Decimal(str(obs_value)) if obs_value is not None else None,
             "adjustment_type":  attribute.get("adjustment_type"),
             "region": attribute.get("region"),
             "measure": attribute.get("measure")
