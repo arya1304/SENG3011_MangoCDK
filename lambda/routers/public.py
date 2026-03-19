@@ -3,13 +3,10 @@ import re
 from decimal import Decimal
 
 import boto3
-from boto3.dynamodb.conditions import Attr
-from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime, timezone
 from boto3.dynamodb.conditions import Key
-
-import boto3
-
+from boto3.dynamodb.conditions import Attr
+from fastapi import APIRouter, HTTPException, Query
 
 TABLE_NAME = os.environ.get("CPI_TABLE_NAME")
 router = APIRouter(prefix="/public")
