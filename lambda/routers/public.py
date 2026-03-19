@@ -7,7 +7,7 @@ import boto3
 from boto3.dynamodb.conditions import Attr
 from fastapi import APIRouter, HTTPException, Query
 
-TABLE_NAME = os.environ.get("TABLE_NAME")
+TABLE_NAME = os.environ.get("CPI_TABLE_NAME") 
 router = APIRouter(prefix="/public")
 unemployment_table = boto3.resource('dynamodb').Table(os.environ['UNEMPLOYMENT_TABLE_NAME'])
 cpi_table = boto3.resource('dynamodb').Table(os.environ['CPI_TABLE_NAME'])
