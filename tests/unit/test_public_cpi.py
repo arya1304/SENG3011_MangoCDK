@@ -13,6 +13,9 @@ os.environ["AWS_SESSION_TOKEN"] = "testing"
 os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 os.environ["BUCKET_NAME"] = "test-bucket"
 os.environ["TABLE_NAME"] = "test-table"
+os.environ["CPI_TABLE_NAME"] = "test-cpi-table"
+os.environ["UNEMPLOYMENT_TABLE_NAME"] = "test-unemployment-table"
+os.environ["GDP_TABLE_NAME"] = "test-gdp-table"
 
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../lambda"))
@@ -131,7 +134,7 @@ def test_get_cpi_events_sorted_by_time_period():
     resp = client.get("/public/cpi?start=2023-Q1&end=2024-Q1")
     assert resp.status_code == 200
 
-    periods = [e["time_object"]["timestamp"] for e in resp.json()["events"]]
+    periods = [(e["year"], e["quarter"]) for e in resp.json()["events"]]
     assert periods == sorted(periods)
 
 
@@ -145,8 +148,8 @@ def test_get_cpi_excludes_outside_range():
     resp = client.get("/public/cpi?start=2023-Q2&end=2023-Q3")
     assert resp.status_code == 200
 
-    periods = [e["time_object"]["timestamp"] for e in resp.json()["events"]]
-    assert periods == ["2023-Q2", "2023-Q3"]
+    periods = [(e["year"], e["quarter"]) for e in resp.json()["events"]]
+    assert periods == [("2023", "Q2"), ("2023", "Q3")]
 
 
 @mock_aws
@@ -159,13 +162,10 @@ def test_get_cpi_event_shape():
     assert resp.status_code == 200
 
     event = resp.json()["events"][0]
-    assert event["event_type"] == "cpi_observation"
-    assert event["time_object"]["timestamp"] == "2023-Q1"
-    assert event["time_object"]["duration"] == 1
-    assert event["time_object"]["duration_unit"] == "quarter"
-    assert event["attribute"]["obs_value"] == 132.6
-    assert event["attribute"]["region"] == "50"
-    assert event["attribute"]["freq"] == "Q"
+    assert event["year"] == "2023"
+    assert event["quarter"] == "Q1"
+    assert event["region"] == "50"
+    assert event["cpi_value"] == 132.6
 
 
 @mock_aws

@@ -1,6 +1,5 @@
 import os
 import re
-from datetime import datetime, timezone
 from decimal import Decimal
 
 import boto3
@@ -64,38 +63,19 @@ def get_cpi(
 
     events = [
         {
-            "time_object": {
-                "timestamp": item.get("time_period"),
-                "duration": 1,
-                "duration_unit": "quarter",
-                "timezone": "GMT+11",
-            },
-            "event_type": "cpi_observation",
-            "attribute": {
-                "dataset_id": item.get("dataset_id"),
-                "time_period": item.get("time_period"),
-                "year": item.get("year"),
-                "quarter": item.get("quarter"),
-                "region": item.get("region"),
-                "obs_value": _to_serialisable(item.get("obs_value")),
-                "obs_status": item.get("obs_status"),
-                "freq": item.get("freq"),
-                "unit_measure": item.get("unit_measure"),
-                "data_source": item.get("data_source"),
-            },
+            "year": item.get("year"),
+            "quarter": item.get("quarter"),
+            "region": item.get("region"),
+            "cpi_value": _to_serialisable(item.get("obs_value")),
         }
         for item in items
     ]
 
-    events.sort(key=lambda e: e["time_object"]["timestamp"])
+    events.sort(key=lambda e: (e["year"], e["quarter"]))
 
     return {
         "data_source": "Australian Bureau of Statistics (ABS)",
         "dataset_type": "Government Economic Indicator",
-        "time_object": {
-            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f"),
-            "timezone": "GMT+11",
-        },
         "events": events,
     }
 
