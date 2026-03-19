@@ -4,5 +4,6 @@
     "extraPaths": ["lambda"],
     "reportArgumentType": "none",
     "reportTypedDictNotRequiredAccess": "none",
-    "reportOperatorIssue": "none"
+    "reportOperatorIssue": "none",
+    "reportAttributeAccessIssue": "none"
 }
