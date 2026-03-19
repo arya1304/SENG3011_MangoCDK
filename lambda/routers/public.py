@@ -7,7 +7,7 @@ import boto3
 from boto3.dynamodb.conditions import Attr
 from fastapi import APIRouter, HTTPException, Query
 
-TABLE_NAME = os.environ.get("CPI_TABLE_NAME") 
+TABLE_NAME = os.environ.get("CPI_TABLE_NAME")
 router = APIRouter(prefix="/public")
 unemployment_table = boto3.resource('dynamodb').Table(os.environ['UNEMPLOYMENT_TABLE_NAME'])
 cpi_table = boto3.resource('dynamodb').Table(os.environ['CPI_TABLE_NAME'])
@@ -43,7 +43,7 @@ def get_cpi(
         raise HTTPException(status_code=400, detail="start must not be after end.")
 
     if not TABLE_NAME:
-        raise HTTPException(status_code=500, detail="Server configuration error: TABLE_NAME not set.")
+        raise HTTPException(status_code=500, detail="Server configuration error: CPI_TABLE_NAME not set.")
 
     table = dynamodb.Table(TABLE_NAME)
 
