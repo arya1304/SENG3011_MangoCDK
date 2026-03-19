@@ -4,14 +4,16 @@ import re
 from decimal import Decimal
 
 import boto3
+from datetime import datetime, timezone
+from boto3.dynamodb.conditions import Key
 from boto3.dynamodb.conditions import Attr
 from fastapi import APIRouter, HTTPException, Query
 
 TABLE_NAME = os.environ.get("CPI_TABLE_NAME")
 router = APIRouter(prefix="/public")
-unemployment_table = boto3.resource('dynamodb').Table(os.environ['UNEMPLOYMENT_TABLE_NAME'])
-cpi_table = boto3.resource('dynamodb').Table(os.environ['CPI_TABLE_NAME'])
-gdp_table = boto3.resource('dynamodb').Table(os.environ['GDP_TABLE_NAME'])
+unemployment_table = boto3.resource('dynamodb').Table(os.environ['UNEMPLOYMENT_TABLE_NAME']) # type: ignore
+cpi_table = boto3.resource('dynamodb').Table(os.environ['CPI_TABLE_NAME']) # type: ignore
+gdp_table = boto3.resource('dynamodb').Table(os.environ['GDP_TABLE_NAME']) # type: ignore
 
 dynamodb = boto3.resource("dynamodb")
 
@@ -45,7 +47,7 @@ def get_cpi(
     if not TABLE_NAME:
         raise HTTPException(status_code=500, detail="Server configuration error: CPI_TABLE_NAME not set.")
 
-    table = dynamodb.Table(TABLE_NAME)
+    table = dynamodb.Table(TABLE_NAME) # type: ignore
 
     scan_kwargs = {
         "FilterExpression": Attr("time_period").between(start, end),
@@ -136,12 +138,45 @@ def get_unemployment(
     }
 
 @router.get("/gdp")
-def get_gdp():
+def get_gdp(
+    start: str,
+    end: str,
+):
     """
     GET /public/gdp?start=2023-Q1&end=2024-Q4
     Retrieve GDP data from the database
     """
-    return {"message": "GDP data retrieved successfully"}
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
+
+    result = gdp_table.query(
+        KeyConditionExpression=Key("dataset_id").eq("ABS:ANA_IND_GVA(1.0.0)") & Key("time_period").between(start, end)
+    )
+
+    items = result["Items"]
+
+    if not items:
+        raise HTTPException(status_code=404, detail="No gross domestic product data found")
+
+    events = []
+    for item in items:
+        events.append({
+            "id": item.get("dataset_id"),
+            "time_period": item.get("time_period"),
+            "source": item.get("data_source"),
+            "industry": item.get("industry"),
+            "region": item.get("region"),
+            "gdp_value": float(item.get("obs_value")) if item.get("obs_value") is not None else None,
+            "data_item": item.get("data_item"),
+            "adjustment_type": item.get("adjustment_type"),
+            "obs_status": item.get("obs_status"),
+        })
+
+    return {
+        "timestamp": timestamp,
+        "dataset": "ABS - Gross Domestic Product (GDP)",
+        "count": len(events),
+        "events": events,
+    }
 
 ############################################################################
 # analysis endpoints
