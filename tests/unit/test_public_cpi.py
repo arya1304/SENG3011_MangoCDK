@@ -13,6 +13,7 @@ os.environ["AWS_SESSION_TOKEN"] = "testing"
 os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 os.environ["BUCKET_NAME"] = "test-bucket"
 os.environ["TABLE_NAME"] = "test-table"
+
 os.environ["CPI_TABLE_NAME"] = "test-cpi-table"
 os.environ["UNEMPLOYMENT_TABLE_NAME"] = "test-unemployment-table"
 os.environ["GDP_TABLE_NAME"] = "test-gdp-table"
@@ -25,7 +26,7 @@ import routers.public as public_module
 
 client = TestClient(app)
 
-TABLE_NAME = "test-table"
+TABLE_NAME = "test-cpi-table"
 
 # Rows matching the real DynamoDB structure observed in AWS console
 MOCK_ROWS = [
@@ -212,4 +213,4 @@ def test_get_cpi_missing_table_name(monkeypatch):
     monkeypatch.setattr(public_module, "TABLE_NAME", None)
     resp = client.get("/public/cpi?start=2023-Q1&end=2024-Q4")
     assert resp.status_code == 500
-    assert "TABLE_NAME" in resp.json()["detail"]
+    assert "CPI_TABLE_NAME" in resp.json()["detail"]
