@@ -126,11 +126,32 @@ def get_gdp(
     """
 
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
+
+
+    response = gdp_table.scan()
+    items = response.get("Items", [])
+
+    while "LastEvaluatedKey" in response:
+        response = unemployment_table.scan(
+            ExclusiveStartKey=response["LastEvaluatedKey"]
+        )
+        items.extend(response.get("Items", []))
+
+    if not items:
+        raise HTTPException(status_code=404, detail="No gross domestic product data found")
+
+    # filter by time period range if provided
+    if start or end:
+        items = [
+            item for item in items
+            if (not start or item.get("time_period", "") >= start)
+            and (not end or item.get("time_period", "") <= end)
+        ]
     
     # if start and end:
-    result = gdp_table.query(
-        KeyConditionExpression = Key("dataset_id").eq("ABS:ANA_IND_GVA(1.0.0)") & Key("time_period").between(start, end)
-    )
+    # result = gdp_table.query(
+    #     KeyConditionExpression = Key("dataset_id").eq & Key("time_period").between(start, end)
+    # )
     
     # elif start:
     #     result = gdp_table.query(
@@ -147,10 +168,10 @@ def get_gdp(
     #         KeyConditionExpression=Key("dataset_id").eq("ABS:ANA_IND_GVA(1.0.0)")
     #     )
 
-    items = result["Items"]
+    # items = result["Items"]
 
-    if not items:
-        raise HTTPException(status_code=404, detail="No gross domestic product data found")
+    # if not items:
+    #     raise HTTPException(status_code=404, detail="No gross domestic product data found")
     
 
     events = []
