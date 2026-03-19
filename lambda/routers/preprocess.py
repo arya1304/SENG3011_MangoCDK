@@ -498,7 +498,7 @@ def preprocess_clean_gdp(dataflowIdentifier: str, dataKey: str):
 
 
 @router.post("/cleanUnemployment")
-def preprocess_clean_gdp(dataflowIdentifier: str, dataKey: str):
+def preprocess_clean_unemployment(dataflowIdentifier: str, dataKey: str):
     # GDP
     # find the latest preprocessed gdp file
     unemployment_prefix = f"preprocessed/{dataflowIdentifier}/{dataKey}/"
