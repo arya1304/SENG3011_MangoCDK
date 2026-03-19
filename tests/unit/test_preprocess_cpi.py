@@ -12,6 +12,9 @@ os.environ["AWS_SESSION_TOKEN"] = "testing"
 os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 os.environ["BUCKET_NAME"] = "test-bucket"
 os.environ["TABLE_NAME"] = "test-table"
+os.environ["CPI_TABLE_NAME"] = "test-cpi-table"
+os.environ["UNEMPLOYMENT_TABLE_NAME"] = "test-unemployment-table"
+os.environ["GDP_TABLE_NAME"] = "test-gdp-table"
 
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../lambda"))
