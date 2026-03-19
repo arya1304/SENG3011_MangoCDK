@@ -86,17 +86,26 @@ def get_cpi(
         "events": events,
     }
 
+def _validate_month(value: str, param_name: str) -> str:
+    if not re.fullmatch(r"\d{4}-\d{2}", value):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid {param_name} format. Expected YYYY-MM (e.g. 2023-01)."
+        )
+    return value
+
+
 @router.get("/unemployment")
 def get_unemployment(
-    start: str = Query(..., description="Start quarter, e.g. 2023-Q1"),
-    end: str = Query(..., description="End quarter, e.g. 2024-Q4"),
+    start: str = Query(..., description="Start month, e.g. 2023-01"),
+    end: str = Query(..., description="End month, e.g. 2024-12"),
 ):
     """
-    GET /public/unemployment?start=2023-Q1&end=2024-Q4
-    Retrieve unemployment data from DynamoDB for the given quarter range.
+    GET /public/unemployment?start=2023-01&end=2024-12
+    Retrieve unemployment data from DynamoDB for the given month range.
     """
-    _validate_quarter(start, "start")
-    _validate_quarter(end, "end")
+    _validate_month(start, "start")
+    _validate_month(end, "end")
 
     if start > end:
         raise HTTPException(status_code=400, detail="start must not be after end.")
@@ -122,14 +131,14 @@ def get_unemployment(
     events = [
         {
             "year": item.get("year"),
-            "quarter": item.get("quarter"),
+            "month": item.get("time_period", "").split("-")[1] if "-" in item.get("time_period", "") else None,
             "region": item.get("region"),
             "unemployment_value": _to_serialisable(item.get("obs_value")),
         }
         for item in items
     ]
 
-    events.sort(key=lambda e: (e["year"], e["quarter"]))
+    events.sort(key=lambda e: (e["year"] or "", e["month"] or ""))
 
     return {
         "data_source": "Australian Bureau of Statistics (ABS)",

@@ -30,62 +30,42 @@ UNEMPLOYMENT_TABLE_NAME = "test-unemployment-table"
 MOCK_ROWS = [
     {
         "dataset_id": "https://data.api.abs.gov.au/rest/data/ABS,LF/...",
-        "time_period": "2023-Q1",
+        "time_period": "2023-01",
         "year": "2023",
-        "quarter": "Q1",
         "region": "AUS",
         "obs_value": Decimal("3.5"),
-        "obs_status": "A",
-        "freq": "M",
-        "unit_measure": "PC",
         "data_source": "Australian Bureau of Statistics (ABS)",
     },
     {
         "dataset_id": "https://data.api.abs.gov.au/rest/data/ABS,LF/...",
-        "time_period": "2023-Q2",
+        "time_period": "2023-02",
         "year": "2023",
-        "quarter": "Q2",
         "region": "AUS",
         "obs_value": Decimal("3.6"),
-        "obs_status": "A",
-        "freq": "M",
-        "unit_measure": "PC",
         "data_source": "Australian Bureau of Statistics (ABS)",
     },
     {
         "dataset_id": "https://data.api.abs.gov.au/rest/data/ABS,LF/...",
-        "time_period": "2023-Q3",
+        "time_period": "2023-03",
         "year": "2023",
-        "quarter": "Q3",
         "region": "AUS",
         "obs_value": Decimal("3.8"),
-        "obs_status": "A",
-        "freq": "M",
-        "unit_measure": "PC",
         "data_source": "Australian Bureau of Statistics (ABS)",
     },
     {
         "dataset_id": "https://data.api.abs.gov.au/rest/data/ABS,LF/...",
-        "time_period": "2024-Q1",
+        "time_period": "2024-01",
         "year": "2024",
-        "quarter": "Q1",
         "region": "AUS",
         "obs_value": Decimal("4.1"),
-        "obs_status": "A",
-        "freq": "M",
-        "unit_measure": "PC",
         "data_source": "Australian Bureau of Statistics (ABS)",
     },
     {
         "dataset_id": "https://data.api.abs.gov.au/rest/data/ABS,LF/...",
-        "time_period": "2024-Q2",
+        "time_period": "2024-06",
         "year": "2024",
-        "quarter": "Q2",
         "region": "AUS",
         "obs_value": Decimal("4.0"),
-        "obs_status": "A",
-        "freq": "M",
-        "unit_measure": "PC",
         "data_source": "Australian Bureau of Statistics (ABS)",
     },
 ]
@@ -115,7 +95,7 @@ def test_get_unemployment_returns_events_in_range():
     public_module.unemployment_table = db.Table(UNEMPLOYMENT_TABLE_NAME)
     _create_table(db)
 
-    resp = client.get("/public/unemployment?start=2023-Q1&end=2023-Q3")
+    resp = client.get("/public/unemployment?start=2023-01&end=2023-03")
     assert resp.status_code == 200
 
     body = resp.json()
@@ -128,12 +108,12 @@ def test_get_unemployment_event_shape():
     public_module.unemployment_table = db.Table(UNEMPLOYMENT_TABLE_NAME)
     _create_table(db)
 
-    resp = client.get("/public/unemployment?start=2023-Q1&end=2023-Q1")
+    resp = client.get("/public/unemployment?start=2023-01&end=2023-01")
     assert resp.status_code == 200
 
     event = resp.json()["events"][0]
     assert event["year"] == "2023"
-    assert event["quarter"] == "Q1"
+    assert event["month"] == "01"
     assert event["region"] == "AUS"
     assert event["unemployment_value"] == 3.5
 
@@ -144,14 +124,14 @@ def test_get_unemployment_excludes_outside_range():
     public_module.unemployment_table = db.Table(UNEMPLOYMENT_TABLE_NAME)
     _create_table(db)
 
-    resp = client.get("/public/unemployment?start=2023-Q2&end=2023-Q3")
+    resp = client.get("/public/unemployment?start=2023-02&end=2023-03")
     assert resp.status_code == 200
 
     events = resp.json()["events"]
     assert len(events) == 2
-    periods = [e["quarter"] for e in events]
-    assert "Q2" in periods
-    assert "Q3" in periods
+    months = [e["month"] for e in events]
+    assert "02" in months
+    assert "03" in months
 
 
 @mock_aws
@@ -160,16 +140,15 @@ def test_get_unemployment_empty_range():
     public_module.unemployment_table = db.Table(UNEMPLOYMENT_TABLE_NAME)
     _create_table(db)
 
-    resp = client.get("/public/unemployment?start=2020-Q1&end=2020-Q4")
+    resp = client.get("/public/unemployment?start=2020-01&end=2020-12")
     assert resp.status_code == 200
     assert resp.json()["events"] == []
 
 
 @mock_aws
-def test_get_unemployment_404_when_table_empty():
+def test_get_unemployment_empty_table():
     db = boto3.resource("dynamodb", region_name="us-east-1")
     public_module.unemployment_table = db.Table(UNEMPLOYMENT_TABLE_NAME)
-    # create table but don't insert any rows
     db.create_table(
         TableName=UNEMPLOYMENT_TABLE_NAME,
         KeySchema=[
@@ -183,7 +162,7 @@ def test_get_unemployment_404_when_table_empty():
         BillingMode="PAY_PER_REQUEST",
     )
 
-    resp = client.get("/public/unemployment?start=2023-Q1&end=2024-Q4")
+    resp = client.get("/public/unemployment?start=2023-01&end=2024-12")
     assert resp.status_code == 200
     assert resp.json()["events"] == []
 
@@ -194,23 +173,23 @@ def test_get_unemployment_missing_params():
 
 
 def test_get_unemployment_missing_end():
-    resp = client.get("/public/unemployment?start=2023-Q1")
+    resp = client.get("/public/unemployment?start=2023-01")
     assert resp.status_code == 422
 
 
 def test_get_unemployment_start_after_end():
-    resp = client.get("/public/unemployment?start=2024-Q4&end=2023-Q1")
+    resp = client.get("/public/unemployment?start=2024-12&end=2023-01")
     assert resp.status_code == 400
     assert "start must not be after end" in resp.json()["detail"]
 
 
 def test_get_unemployment_invalid_start_format():
-    resp = client.get("/public/unemployment?start=2023-01&end=2024-Q4")
+    resp = client.get("/public/unemployment?start=2023-Q1&end=2024-12")
     assert resp.status_code == 400
     assert "start" in resp.json()["detail"]
 
 
 def test_get_unemployment_invalid_end_format():
-    resp = client.get("/public/unemployment?start=2023-Q1&end=2024-4")
+    resp = client.get("/public/unemployment?start=2023-01&end=2024-4")
     assert resp.status_code == 400
     assert "end" in resp.json()["detail"]
