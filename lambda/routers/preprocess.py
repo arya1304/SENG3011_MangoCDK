@@ -451,7 +451,7 @@ def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
     return {"data": raw}
 
 @router.post("/cleanGdp")
-def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
+def preprocess_clean_gdp(dataflowIdentifier: str, dataKey: str):
     # GDP
     # find the latest preprocessed gdp file
     gdp_prefix = f"preprocessed/{dataflowIdentifier}/{dataKey}/"
