@@ -9,9 +9,9 @@ BUCKET_NAME = os.environ.get("BUCKET_NAME")
 router = APIRouter(prefix="/preprocess")
 
 s3 = boto3.client('s3')
-cpi_table = boto3.resource('dynamodb').Table(os.environ['CPI_TABLE_NAME'])
-unemployment_table = boto3.resource('dynamodb').Table(os.environ['UNEMPLOYMENT_TABLE_NAME'])
-gdp_table = boto3.resource('dynamodb').Table(os.environ['GDP_TABLE_NAME'])
+cpi_table = boto3.resource('dynamodb').Table(os.environ['CPI_TABLE_NAME']) # type: ignore
+unemployment_table = boto3.resource('dynamodb').Table(os.environ['UNEMPLOYMENT_TABLE_NAME']) # type: ignore
+gdp_table = boto3.resource('dynamodb').Table(os.environ['GDP_TABLE_NAME']) # type: ignore
 
 @router.post("/cpi")
 def preprocess_cpi(dataflowIdentifier: str, dataKey: str):
@@ -360,7 +360,7 @@ def preprocess_unemployment(dataflowIdentifier: str, dataKey: str):
     return result
 
 
-@router.post("/clean")
+@router.post("/cleanCpi")
 def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
     if not BUCKET_NAME:
         raise HTTPException(status_code=500, detail="Server configuration error: BUCKET_NAME not set")
@@ -407,15 +407,19 @@ def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
 
         cpi_table.put_item(Item=each_row)  
 
+    return {"data": raw}
+
+@router.post("/cleanGdp")
+def preprocess_clean_gdp(dataflowIdentifier: str, dataKey: str):
     # GDP
     # find the latest preprocessed gdp file
-    gdp_prefix = "preprocessed/ABS,ANA_IND_GVA,1.0.0/......Q/"
+    gdp_prefix = f"preprocessed/{dataflowIdentifier}/{dataKey}/"
     gdp_listing = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=gdp_prefix)
 
     if 'Contents' not in gdp_listing or not gdp_listing['Contents']:
-        raise HTTPException(status_code=404, detail=f"No Preprocessed GDP data found at s3://{BUCKET_NAME}/{prefix}")
+        raise HTTPException(status_code=404, detail=f"No Preprocessed GDP data found at s3://{BUCKET_NAME}/{ gdp_prefix}")
 
-    gdp_latest_key = sorted(listing['Contents'], key=lambda x: x['LastModified'], reverse=True)[0]['Key']
+    gdp_latest_key = sorted(gdp_listing['Contents'], key=lambda x: x['LastModified'], reverse=True)[0]['Key']
     gdp_raw = json.loads(s3.get_object(Bucket=BUCKET_NAME, Key=gdp_latest_key)['Body'].read())
 
     gdp_dataset_id = gdp_raw.get("dataset_id")
@@ -431,7 +435,7 @@ def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
         time_period = attribute.get("time_period", "")
         parts = time_period.split("-")
         obs_value = attribute.get("obs_value")
-
+        
         each_row = {
             "dataset_id": gdp_dataset_id,
             "data_source": gdp_data_source,
@@ -440,7 +444,7 @@ def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
             "industry": attribute.get("industry"),
             "region": attribute.get("region"),
             "time_period": attribute.get("time_period"),
-            "obs_value": attribute.get("obs_value"),
+            "obs_value": Decimal(str(obs_value)) if obs_value is not None else None,
             "data_item": attribute.get("data_item"),
             "adjustment_type": attribute.get("adjustment_type"),
             "obs_status":attribute.get("obs_status"),
@@ -448,4 +452,49 @@ def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
         gdp_table.put_item(Item=each_row)  
     
     
-    return {"data": raw}
+    return {"data": gdp_raw}
+
+
+
+@router.post("/cleanUnemployment")
+def preprocess_clean_unemployment(dataflowIdentifier: str, dataKey: str):
+    # GDP
+    # find the latest preprocessed gdp file
+    unemployment_prefix = f"preprocessed/{dataflowIdentifier}/{dataKey}/"
+    unemployment_listing = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=unemployment_prefix)
+
+    if 'Contents' not in unemployment_listing or not unemployment_listing['Contents']:
+        raise HTTPException(status_code=404, detail=f"No Preprocessed unemployment data found at s3://{BUCKET_NAME}/{ unemployment_prefix}")
+
+    unemployment_latest_key = sorted(unemployment_listing['Contents'], key=lambda x: x['LastModified'], reverse=True)[0]['Key']
+    unemployment_raw = json.loads(s3.get_object(Bucket=BUCKET_NAME, Key=unemployment_latest_key)['Body'].read())
+
+    unemployment_dataset_id = unemployment_raw.get("dataset_id")
+    unemployment_data_source = unemployment_raw.get("data_source")
+
+    events = unemployment_raw.get("events", [])
+    if not events:
+        raise HTTPException(status_code=404, detail="No events found in preprocessed data")
+    
+    for event in events:
+        attribute = event.get("attribute", {})
+
+        time_period = attribute.get("time_period", "")
+        parts = time_period.split("-")
+        obs_value = attribute.get("obs_value")
+        each_row = {
+            "dataset_id": unemployment_dataset_id,
+            "data_source": unemployment_data_source,
+            "time_period": time_period,
+            "year": parts[0] if len(parts) > 0 else None,
+            "sex": attribute.get("sex"),
+            "age":  attribute.get("age"),
+            "obs_value": Decimal(str(obs_value)) if obs_value is not None else None,
+            "adjustment_type":  attribute.get("adjustment_type"),
+            "region": attribute.get("region"),
+            "measure": attribute.get("measure")
+        }
+        unemployment_table.put_item(Item=each_row)  
+    
+    
+    return {"data": unemployment_raw}
