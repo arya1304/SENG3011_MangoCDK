@@ -104,7 +104,9 @@ def test_public_gdp_missing_params():
 @mock_aws
 def test_public_gdp_no_events():
     table = create_dyanmo_table()
+    public_module.gdp_table = table
     # leave the table empty 
+
 
     client = TestClient(app)
     
