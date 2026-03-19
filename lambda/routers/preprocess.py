@@ -406,7 +406,7 @@ def preprocess_clean_cpi(dataflowIdentifier: str, dataKey: str):
         }
 
         cpi_table.put_item(Item=each_row)  
-        
+
     return {"data": raw}
 
 @router.post("/cleanGdp")
@@ -481,7 +481,7 @@ def preprocess_clean_unemployment(dataflowIdentifier: str, dataKey: str):
 
         time_period = attribute.get("time_period", "")
         parts = time_period.split("-")
-
+        obs_value = attribute.get("obs_value")
         each_row = {
             "dataset_id": unemployment_dataset_id,
             "data_source": unemployment_data_source,
@@ -489,6 +489,7 @@ def preprocess_clean_unemployment(dataflowIdentifier: str, dataKey: str):
             "year": parts[0] if len(parts) > 0 else None,
             "sex": attribute.get("sex"),
             "age":  attribute.get("age"),
+            "obs_value": Decimal(str(obs_value)) if obs_value is not None else None,
             "adjustment_type":  attribute.get("adjustment_type"),
             "region": attribute.get("region"),
             "measure": attribute.get("measure")
