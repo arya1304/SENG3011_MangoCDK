@@ -9,7 +9,7 @@ gdp_table = boto3.resource('dynamodb').Table(os.environ['GDP_TABLE_NAME'])
 unemployment_table = boto3.resource('dynamodb').Table(os.environ['UNEMPLOYMENT_TABLE_NAME'])
 
 # helper function to retrieve data from DynamoDB tables
-def retrieve_data(table):
+def _scan_table(table):
     items = []
     response = table.scan()
     items.extend(response.get("Items", []))
@@ -20,7 +20,7 @@ def retrieve_data(table):
     return items
 
 # helper function to filter items by time_period range
-def filter_by_time_period(items, start: str = None, end: str = None):
+def _filter_by_time_period(items, start: str = None, end: str = None):
     return [
         item for item in items
         if (start is None or item.get("time_period", "") >= start) and
@@ -28,7 +28,7 @@ def filter_by_time_period(items, start: str = None, end: str = None):
     ]
 
 # helper function to sort items by time_period
-def sort_by_time_period(items):
+def _sort_by_time_period(items):
     return sorted(items, key=lambda x: x.get("time_period", ""))
 
 # helper function to convert value to float
@@ -40,7 +40,7 @@ def to_float(value):
     except (ValueError, TypeError):
         return None
 
-def calculate_trend(sorted_items):
+def _calculate_trend(sorted_items):
     periods = []
     valid_changes = []
  
@@ -110,10 +110,18 @@ def calculate_trend(sorted_items):
  
 @router.get("/ananlysis/cpi-trend")
 def get_cpi_trend(start: str = None, end: str = None, region: str = None):
-    items = retrieve_data(cpi_table)
+    items = _scan_table(cpi_table)
+    if not items:
+        raise HTTPException(status_code=404, detail="No CPI data found")
+    
     if region:
-        items = [item for item in items if item.get("region", "").lower() == region.lower()]
-    filtered_items = filter_by_time_period(items, start, end)
-    sorted_items = sort_by_time_period(filtered_items)
-    trend, summary = calculate_trend(sorted_items)
+        items = [item for item in items if item.get("region") == region]
+
+    items = _filter_by_time_period(items, start, end)
+
+    if len(items) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 data points are required to calculate trend")
+    
+    sorted_items = _sort_by_time_period(items)
+    trend, summary = _calculate_trend(sorted_items)
     return {"trend": trend, "summary": summary}
