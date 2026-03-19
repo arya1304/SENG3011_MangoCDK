@@ -2,7 +2,6 @@ import os
 from decimal import Decimal
 
 import boto3
-import pytest
 from moto import mock_aws
 from fastapi.testclient import TestClient
 
