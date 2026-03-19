@@ -26,7 +26,6 @@ import routers.preprocess as preprocess_module
 
 
 
-
 MOCK_RAW_GDP = {
       "data": {
         "structures": [{
@@ -129,3 +128,17 @@ def test_preprocess_gdp_invalid_raw_data_format():
     response = client.post("/preprocess/gdp")
     assert response.status_code == 500
     assert "Unexpected SDMX-JSON" in response.json()["detail"]
+
+
+@mock_aws
+def test_preprocess_gdp_bucket_name():
+    preprocess_module.BUCKET_NAME = None
+    client = TestClient(app)
+    response = client.post("/preprocess/gdp")
+    assert response.status_code == 500
+    assert "Server configuration error" in response.json()["detail"]
+    
+    #setting it back to original
+    preprocess_module.BUCKET_NAME = "test-bucket"
+
+
