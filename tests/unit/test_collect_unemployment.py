@@ -55,7 +55,7 @@ def test_collect_unemployment_success():
     collect_module.s3 = s3_client
     collect_module.BUCKET_NAME = BUCKET_NAME
 
-    with patch("routers.collect.requests.get", return_value=_make_mock_response()) as mock_get:
+    with patch("routers.collect.requests.get", return_value=_make_mock_response()):
         resp = client.post(
             f"/collect/unemployment?dataflowIdentifier={DATAFLOW_ID}&dataKey={DATA_KEY}"
         )
