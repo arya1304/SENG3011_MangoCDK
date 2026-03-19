@@ -196,3 +196,21 @@ def test_get_unemployment_missing_params():
 def test_get_unemployment_missing_end():
     resp = client.get("/public/unemployment?start=2023-Q1")
     assert resp.status_code == 422
+
+
+def test_get_unemployment_start_after_end():
+    resp = client.get("/public/unemployment?start=2024-Q4&end=2023-Q1")
+    assert resp.status_code == 400
+    assert "start must not be after end" in resp.json()["detail"]
+
+
+def test_get_unemployment_invalid_start_format():
+    resp = client.get("/public/unemployment?start=2023-01&end=2024-Q4")
+    assert resp.status_code == 400
+    assert "start" in resp.json()["detail"]
+
+
+def test_get_unemployment_invalid_end_format():
+    resp = client.get("/public/unemployment?start=2023-Q1&end=2024-4")
+    assert resp.status_code == 400
+    assert "end" in resp.json()["detail"]

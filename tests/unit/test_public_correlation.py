@@ -201,3 +201,62 @@ def test_correlation_returns_valid_coefficient():
     assert body["start"] == "2023-Q1"
     assert body["end"] == "2023-Q2"
     assert -1 <= body["correlation_coefficient"] <= 1
+
+
+@mock_aws
+def test_correlation_unable_when_cpi_values_identical():
+    dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
+    cpi = dynamodb.create_table(
+        TableName="test-cpi-table",
+        KeySchema=[{"AttributeName": "time_period", "KeyType": "HASH"}],
+        AttributeDefinitions=[{"AttributeName": "time_period", "AttributeType": "S"}],
+        BillingMode="PAY_PER_REQUEST",
+    )
+    gdp = dynamodb.create_table(
+        TableName="test-gdp-table",
+        KeySchema=[{"AttributeName": "time_period", "KeyType": "HASH"}],
+        AttributeDefinitions=[{"AttributeName": "time_period", "AttributeType": "S"}],
+        BillingMode="PAY_PER_REQUEST",
+    )
+
+    # all CPI values identical = zero standard deviation
+    for q in ["2023-Q1", "2023-Q2", "2023-Q3"]:
+        cpi.put_item(Item={"time_period": q, "obs_value": Decimal("100.0")})
+    for i, q in enumerate(["2023-Q1", "2023-Q2", "2023-Q3"]):
+        gdp.put_item(Item={"time_period": q, "obs_value": Decimal(str(500000 + i * 1000))})
+    public_module.cpi_table = cpi
+    public_module.gdp_table = gdp
+
+    response = client.get("/public/analysis/cpi-gdp-correlation?start=2023-Q1&end=2023-Q3")
+    assert response.status_code == 400
+    assert "unable to calculate correlation" in response.json()["detail"]
+
+
+@mock_aws
+def test_correlation_unable_when_gdp_values_identical():
+    """When all GDP values are the same, std dev is 0 → correlation is None → 400"""
+    dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
+    cpi = dynamodb.create_table(
+        TableName="test-cpi-table",
+        KeySchema=[{"AttributeName": "time_period", "KeyType": "HASH"}],
+        AttributeDefinitions=[{"AttributeName": "time_period", "AttributeType": "S"}],
+        BillingMode="PAY_PER_REQUEST",
+    )
+    gdp = dynamodb.create_table(
+        TableName="test-gdp-table",
+        KeySchema=[{"AttributeName": "time_period", "KeyType": "HASH"}],
+        AttributeDefinitions=[{"AttributeName": "time_period", "AttributeType": "S"}],
+        BillingMode="PAY_PER_REQUEST",
+    )
+    for i, q in enumerate(["2023-Q1", "2023-Q2", "2023-Q3"]):
+        cpi.put_item(Item={"time_period": q, "obs_value": Decimal(str(130 + i))})
+    
+    # all GDP values identical = zero standard deviation
+    for q in ["2023-Q1", "2023-Q2", "2023-Q3"]:
+        gdp.put_item(Item={"time_period": q, "obs_value": Decimal("500000")})
+    public_module.cpi_table = cpi
+    public_module.gdp_table = gdp
+
+    response = client.get("/public/analysis/cpi-gdp-correlation?start=2023-Q1&end=2023-Q3")
+    assert response.status_code == 400
+    assert "unable to calculate correlation" in response.json()["detail"]
