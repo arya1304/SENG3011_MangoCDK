@@ -526,6 +526,7 @@ def preprocess_clean_unemployment(dataflowIdentifier: str, dataKey: str):
         each_row = {
             "dataset_id": unemployment_dataset_id,
             "data_source": unemployment_data_source,
+            "time_period": time_period,
             "year": parts[0] if len(parts) > 0 else None,
             "sex": attribute.get("sex"),
             "age":  attribute.get("age"),
