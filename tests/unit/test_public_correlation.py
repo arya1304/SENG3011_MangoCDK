@@ -67,7 +67,7 @@ def test_correlation_returns_correct_structure():
     dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
     _setup_tables(dynamodb)
 
-    response = client.get("/public/analysis/cpi_gdp_correlation?start=2023-Q1&end=2024-Q1")
+    response = client.get("/public/analysis/cpi-gdp-correlation?start=2023-Q1&end=2024-Q1")
     assert response.status_code == 200
 
     # import json
@@ -88,7 +88,7 @@ def test_correlation_coefficient_in_valid_range():
     dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
     _setup_tables(dynamodb)
 
-    response = client.get("/public/analysis/cpi_gdp_correlation?start=2023-Q1&end=2024-Q1")
+    response = client.get("/public/analysis/cpi-gdp-correlation?start=2023-Q1&end=2024-Q1")
     assert response.status_code == 200
 
     r = response.json()["correlation_coefficient"]
@@ -101,7 +101,7 @@ def test_correlation_strong_positive():
     dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
     _setup_tables(dynamodb)
 
-    response = client.get("/public/analysis/cpi_gdp_correlation?start=2023-Q1&end=2024-Q1")
+    response = client.get("/public/analysis/cpi-gdp-correlation?start=2023-Q1&end=2024-Q1")
     assert response.status_code == 200
 
     body = response.json()
@@ -114,7 +114,7 @@ def test_correlation_filters_by_date_range():
     dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
     _setup_tables(dynamodb)
 
-    response = client.get("/public/analysis/cpi_gdp_correlation?start=2023-Q1&end=2023-Q3")
+    response = client.get("/public/analysis/cpi-gdp-correlation?start=2023-Q1&end=2023-Q3")
     assert response.status_code == 200
 
     body = response.json()
@@ -123,7 +123,7 @@ def test_correlation_filters_by_date_range():
 
 @mock_aws
 def test_correlation_missing_params():
-    response = client.get("/public/analysis/cpi_gdp_correlation")
+    response = client.get("/public/analysis/cpi-gdp-correlation")
     assert response.status_code == 422
 
 
@@ -133,7 +133,7 @@ def test_correlation_not_enough_overlapping_quarters():
     _setup_tables(dynamodb)
 
     # range that only covers 1 quarter
-    response = client.get("/public/analysis/cpi_gdp_correlation?start=2024-Q1&end=2024-Q1")
+    response = client.get("/public/analysis/cpi-gdp-correlation?start=2024-Q1&end=2024-Q1")
     assert response.status_code == 400
     assert "at least 2" in response.json()["detail"]
 
@@ -158,7 +158,7 @@ def test_correlation_no_cpi_data():
     public_module.cpi_table = cpi
     public_module.gdp_table = gdp
 
-    response = client.get("/public/analysis/cpi_gdp_correlation?start=2023-Q1&end=2024-Q1")
+    response = client.get("/public/analysis/cpi-gdp-correlation?start=2023-Q1&end=2024-Q1")
     assert response.status_code == 404
     assert "No CPI data found" in response.json()["detail"]
 
@@ -183,7 +183,7 @@ def test_correlation_no_gdp_data():
     public_module.cpi_table = cpi
     public_module.gdp_table = gdp
 
-    response = client.get("/public/analysis/cpi_gdp_correlation?start=2023-Q1&end=2024-Q1")
+    response = client.get("/public/analysis/cpi-gdp-correlation?start=2023-Q1&end=2024-Q1")
     assert response.status_code == 404
     assert "No GDP data found" in response.json()["detail"]
 
@@ -193,7 +193,7 @@ def test_correlation_returns_valid_coefficient():
     dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
     _setup_tables(dynamodb)
 
-    response = client.get("/public/analysis/cpi_gdp_correlation?start=2023-Q1&end=2023-Q2")
+    response = client.get("/public/analysis/cpi-gdp-correlation?start=2023-Q1&end=2023-Q2")
     assert response.status_code == 200
 
     body = response.json()

@@ -175,7 +175,7 @@ def _pearson_correlation(x, y):
     return numerator / (denom_x * denom_y)
 
 
-@router.get("/analysis/cpi_gdp_correlation")
+@router.get("/analysis/cpi-gdp-correlation")
 def get_cpi_gdp_correlation(start: str, end: str):
     """
     GET /public/analysis/correlation?start=2023-Q1&end=2024-Q4
