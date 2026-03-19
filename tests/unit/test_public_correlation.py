@@ -70,8 +70,8 @@ def test_correlation_returns_correct_structure():
     response = client.get("/public/analysis/cpi_gdp_correlation?start=2023-Q1&end=2024-Q1")
     assert response.status_code == 200
 
-    import json
-    print(json.dumps(response.json(), indent=2))
+    # import json
+    # print(json.dumps(response.json(), indent=2))
 
     body = response.json()
     assert body["analysis_type"] == "pearson_correlation"
