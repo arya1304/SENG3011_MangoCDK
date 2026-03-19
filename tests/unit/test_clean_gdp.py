@@ -24,61 +24,65 @@ import routers.preprocess as preprocess_module
 
 client = TestClient(app)
 
-TABLE_NAME = "test-cpi-table"
-
+TABLE_NAME = "test-gdp-table"
 
 # extract the preprocessed cpi data
 # check if it is stored in the bucket
 # Rows matching the real DynamoDB structure observed in AWS console
 
+
 # preprocessed data that is stored in the S3 Bucket already
 MOCK_PREPROCESSED = {
-    "data_source": "Australian Bureau of Statistics (ABS)",
-    "dataset_type": "Government Economic Indicator",
-    "dataset_id": "https://indicator.api.abs.gov.au/v1/data/CPI_H/json",
-    "time_object": {
-        "timestamp": "2026-03-03 11:30:00.000000",
-        "timezone": "GMT+11"
-    },
-    "events": [
+    'data_source': 'Australian Bureau of Statistics (ABS)', 
+    'dataset_type': 'Government Economic Indicator', 
+    'dataset_id':'https://data.api.abs.gov.au/rest/data/ABS,ANA_IND_GVA,1.0.0/......Q', 
+    'time_object': {
+        'timestamp': '2026-03-19 09:42:18.276944', 
+        'timezone': 'GMT+11'
+    }, 
+    'events': [
         {
-        "time_object": {
-            "timestamp": "2024-Q3",
-            "duration": 1,
-            "duration_unit": "quarter",
-            "timezone": "GMT+11"
-        },
-        "event_type": "cpi_observation",
-        "attribute": {
-            "dataflow": "ABS:CPI(1.0.0)",
-            "measure": "1",
-            "region": "AUS",
-            "freq": "Q",
-            "time_period": "2024-Q3",
-            "obs_value": 137.4,
-            "unit_measure": "IDX",
-            "unit_mult":   "0",
-            "obs_status":  "A"
-        }
-        }
+            'time_object': {
+                'timestamp': '2025-Q1', 
+                'duration': 1, 
+                'duration_unit': 'quarter', 
+                'timezone': 'GMT+11'
+            }, 
+        
+        'event_type': 'gdp_observation', 
+        'attribute': {
+            'dataflow': 'ABS:ANA_IND_GVA(1.0.0)', 
+            'measure': 'VCH', 
+            'data_item': 'GPM', 
+            'sector': 'SSS', 
+            'adjustment_type': '20', 
+            'industry': 'TOTAL', 
+            'region': 'AUS', 
+            'freq': 'Q', 
+            'time_period': '2025-Q1', 
+            'obs_value': 48016, 
+            'unit_measure': 'NA', 
+            'unit_mult': '0', 
+            'obs_status': None   
+    }
+    }
+
     ]
 }
 
 MOCK_ROWS = [
-    {
-        "dataset_id": "https://data.api.abs.gov.au/rest/data/ABS,CPI/1.10001.10.50.Q",
-        "time_period": "2023-Q1",
-        "year": "2023",
-        "quarter": "Q1",
-        "region": "50",
-        "obs_value": Decimal("132.6"),
-        "obs_status": "A",
-        "freq": "Q",
-        "unit_measure": "IDX",
-        "data_source": "Australian Bureau of Statistics (ABS)",
-    }
+    {"dataset_id": "https://data.api.abs.gov.au/rest/data/ABS,ANA_IND_GVA,1.0.0/......Q.json",
+    "data_source": "Australian Bureau of Statistics (ABS)",
+    "year": "2024",
+    "quarter": "Q3",
+    "industry": "A",
+    "region": "AUS",
+    "time_period": "2024-Q3",
+    "obs_value": Decimal("137.4"),
+    "data_item": "1",
+    "adjustment_type": "10",
+    "obs_status": "A",}
 ]
-
 
 def _create_table(db):
     table = db.create_table(
@@ -105,7 +109,7 @@ def test_preprocess_cpi_no_data():
     preprocess_module.s3 = s3  
     s3.create_bucket(Bucket="test-bucket")
 
-    response = client.post("/preprocess/cleanCpi?dataflowIdentifier=ABS,CPI,1.0.0&dataKey=1.AUS.Q")
+    response = client.post("/preprocess/cleanGdp?dataflowIdentifier=ABS,CPI,1.0.0&dataKey=1.AUS.Q")
     assert response.status_code == 404
 
 # no events in the preprocessed data
@@ -118,11 +122,11 @@ def test_preprocess_cpi_no_events():
 
     s3.put_object(
         Bucket="test-bucket",
-        Key="preprocessed/ABS,CPI,1.0.0/1.10001.10.50.Q/2026-03-18T13-41-47Z.json.json",
+        Key="preprocessed/ABS,ANA_IND_GVA,1.0.0/......Q/2024-01-01T00-00-00Z.json",
         Body=json.dumps({"dataset_id": "some-id", "data_source": "ABS"}),
     )
 
-    response = client.post("/preprocess/cleanCpi?dataflowIdentifier=ABS,CPI,1.0.0&dataKey=1.10001.10.50.Q")
+    response = client.post("/preprocess/cleanGdp?dataflowIdentifier=ABS,ANA_IND_GVA,1.0.0&dataKey=......Q")
     assert response.status_code == 404
     assert "No events found in preprocessed data" in response.json()["detail"]
 
@@ -136,9 +140,9 @@ def test_clean_cpi_invalid_preprocessed_data():
     preprocess_module.s3 = s3
     s3.create_bucket(Bucket="test-bucket")
 
-    response = client.post("/preprocess/cleanCpi?dataflowIdentifier=ABS,CPI,1.0.0&dataKey=1.10001.10.50.Q")
+    response = client.post("/preprocess/cleanGdp?dataflowIdentifier=ABS,ANA_IND_GVA,1.0.0&dataKey=......Q")
     assert response.status_code == 404
-    assert "No Preprocessed CPI data found at s3://" in response.json()["detail"]
+    assert "No Preprocessed GDP data found at s3://" in response.json()["detail"]
 
 
 # success case
@@ -155,19 +159,19 @@ def test_clean_cpi_sucess():
     # put the mock data in the table
     s3.put_object(
         Bucket="test-bucket",
-        Key="preprocessed/ABS,CPI/1.10001.10.50.Q/2024-01-01T00-00-00Z.json",
+        Key="preprocessed/ABS,ANA_IND_GVA,1.0.0/......Q/2024-01-01T00-00-00Z.json",
         Body=json.dumps(MOCK_PREPROCESSED),
     )
 
     # call the clean function
-    response = client.post("/preprocess/cleanCpi?dataflowIdentifier=ABS,CPI&dataKey=1.10001.10.50.Q")
+    response = client.post("/preprocess/cleanGdp?dataflowIdentifier=ABS,ANA_IND_GVA,1.0.0&dataKey=......Q")
     assert response.status_code == 200
     assert response.json()["message"] == "success"
 
     # check if the data was populated into the db
     test_tbl = preprocess_module.cpi_table.get_item(
         Key={
-            "dataset_id": "https://indicator.api.abs.gov.au/v1/data/CPI_H/json",
+            "dataset_id": "https://data.api.abs.gov.au/rest/data/ABS,ANA_IND_GVA,1.0.0/......Q.json",
             "time_period": "2024-Q3",
         }
     )["Item"]

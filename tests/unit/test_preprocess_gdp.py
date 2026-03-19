@@ -77,7 +77,7 @@ def test_preprocess_gdp_returns_correct_data_model():
     assert response.status_code == 200
 
     body = response.json()
-    print(body)
+    # print(body)
     assert body["data_source"] == "Australian Bureau of Statistics (ABS)"
     assert body["dataset_type"] == "Government Economic Indicator"
     assert len(body["events"]) == 2
