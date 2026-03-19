@@ -1,3 +1,4 @@
+import math
 import os
 import re
 from decimal import Decimal
@@ -10,11 +11,14 @@ from fastapi import APIRouter, HTTPException, Query
 
 TABLE_NAME = os.environ.get("CPI_TABLE_NAME")
 router = APIRouter(prefix="/public")
-unemployment_table = boto3.resource('dynamodb').Table(os.environ['UNEMPLOYMENT_TABLE_NAME'])
-gdp_table = boto3.resource('dynamodb').Table(os.environ['GDP_TABLE_NAME'])
+unemployment_table = boto3.resource('dynamodb').Table(os.environ['UNEMPLOYMENT_TABLE_NAME']) # type: ignore
+cpi_table = boto3.resource('dynamodb').Table(os.environ['CPI_TABLE_NAME']) # type: ignore
+gdp_table = boto3.resource('dynamodb').Table(os.environ['GDP_TABLE_NAME']) # type: ignore
 
 dynamodb = boto3.resource("dynamodb")
 
+############################################################################
+# retrieval endpoints
 
 def _validate_quarter(value: str, param_name: str) -> str:
     if not re.fullmatch(r"\d{4}-Q[1-4]", value):
@@ -43,7 +47,7 @@ def get_cpi(
     if not TABLE_NAME:
         raise HTTPException(status_code=500, detail="Server configuration error: CPI_TABLE_NAME not set.")
 
-    table = dynamodb.Table(TABLE_NAME)
+    table = dynamodb.Table(TABLE_NAME) # type: ignore
 
     scan_kwargs = {
         "FilterExpression": Attr("time_period").between(start, end),
@@ -83,37 +87,55 @@ def get_cpi(
     }
 
 @router.get("/unemployment")
-def get_unemployment(start: str = None, end: str = None):
+def get_unemployment(
+    start: str = Query(..., description="Start quarter, e.g. 2023-Q1"),
+    end: str = Query(..., description="End quarter, e.g. 2024-Q4"),
+):
     """
     GET /public/unemployment?start=2023-Q1&end=2024-Q4
-    Retrieve unemployment data from the database
+    Retrieve unemployment data from DynamoDB for the given quarter range.
     """
-    response = unemployment_table.scan()
-    items = response.get("Items", [])
+    _validate_quarter(start, "start")
+    _validate_quarter(end, "end")
 
-    while "LastEvaluatedKey" in response:
-        response = unemployment_table.scan(
-            ExclusiveStartKey=response["LastEvaluatedKey"]
-        )
+    if start > end:
+        raise HTTPException(status_code=400, detail="start must not be after end.")
+
+    scan_kwargs = {
+        "FilterExpression": Attr("time_period").between(start, end),
+    }
+
+    items = []
+    while True:
+        response = unemployment_table.scan(**scan_kwargs)
         items.extend(response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        scan_kwargs["ExclusiveStartKey"] = last_key
 
-    if not items:
-        raise HTTPException(status_code=404, detail="No unemployment data found")
+    def _to_serialisable(obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return obj
 
-    # filter by time period range if provided
-    if start or end:
-        items = [
-            item for item in items
-            if (not start or item.get("time_period", "") >= start)
-            and (not end or item.get("time_period", "") <= end)
-        ]
+    events = [
+        {
+            "year": item.get("year"),
+            "quarter": item.get("quarter"),
+            "region": item.get("region"),
+            "unemployment_value": _to_serialisable(item.get("obs_value")),
+        }
+        for item in items
+    ]
 
-    # JSON serialization
-    for item in items:
-        if item.get("obs_value") is not None:
-            item["obs_value"] = float(item["obs_value"])
+    events.sort(key=lambda e: (e["year"], e["quarter"]))
 
-    return {"data": items}
+    return {
+        "data_source": "Australian Bureau of Statistics (ABS)",
+        "dataset_type": "Government Economic Indicator",
+        "events": events,
+    }
 
 @router.get("/gdp")
 def get_gdp(
@@ -124,45 +146,22 @@ def get_gdp(
     GET /public/gdp?start=2023-Q1&end=2024-Q4
     Retrieve GDP data from the database
     """
-
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
-    
-    # if start and end:
-    result = gdp_table.query(
-        KeyConditionExpression = Key("dataset_id").eq("ABS:ANA_IND_GVA(1.0.0)") & Key("time_period").between(start, end)
-    )
-    
-    # elif start:
-    #     result = gdp_table.query(
-    #         KeyConditionExpression = Key("dataset_id").eq("ABS:ANA_IND_GVA(1.0.0)") & Key("time_period").gte(start)
-    #     )
 
-    # elif end:
-    #     result = gdp_table.query(
-    #         KeyConditionExpression = Key("dataset_id").eq("ABS:ANA_IND_GVA(1.0.0)") & Key("time_period").lte(end)
-    #     )
-    
-    # else:
-    #     result = gdp_table.query(
-    #         KeyConditionExpression=Key("dataset_id").eq("ABS:ANA_IND_GVA(1.0.0)")
-    #     )
+    result = gdp_table.query(
+        KeyConditionExpression=Key("dataset_id").eq("ABS:ANA_IND_GVA(1.0.0)") & Key("time_period").between(start, end)
+    )
 
     items = result["Items"]
 
     if not items:
         raise HTTPException(status_code=404, detail="No gross domestic product data found")
-    
 
     events = []
-
     for item in items:
-        # if item.get("obs_value") is not None:
-        #     item["obs_value"] = float(item["obs_value"])
-
-        time_period = item.get("time_period")
         events.append({
             "id": item.get("dataset_id"),
-            "time_period": time_period,
+            "time_period": item.get("time_period"),
             "source": item.get("data_source"),
             "industry": item.get("industry"),
             "region": item.get("region"),
@@ -176,5 +175,100 @@ def get_gdp(
         "timestamp": timestamp,
         "dataset": "ABS - Gross Domestic Product (GDP)",
         "count": len(events),
-        "events": events
+        "events": events,
+    }
+
+############################################################################
+# analysis endpoints
+
+def _scan_table(table):
+    """helper to scan an entire DynamoDB table"""
+    response = table.scan()
+    items = response.get("Items", [])
+    while "LastEvaluatedKey" in response:
+        response = table.scan(ExclusiveStartKey=response["LastEvaluatedKey"])
+        items.extend(response.get("Items", []))
+    return items
+
+
+def _pearson_correlation(x, y):
+    """calculate pearson correlation coefficient between two lists"""
+    n = len(x)
+    if n < 2:
+        return None
+
+    mean_x = sum(x) / n
+    mean_y = sum(y) / n
+
+    numerator = sum((xi - mean_x) * (yi - mean_y) for xi, yi in zip(x, y))
+    denom_x = math.sqrt(sum((xi - mean_x) ** 2 for xi in x))
+    denom_y = math.sqrt(sum((yi - mean_y) ** 2 for yi in y))
+
+    if denom_x == 0 or denom_y == 0:
+        return None
+
+    return numerator / (denom_x * denom_y)
+
+
+@router.get("/analysis/cpi-gdp-correlation")
+def get_cpi_gdp_correlation(start: str, end: str):
+    """
+    GET /public/analysis/correlation?start=2023-Q1&end=2024-Q4
+    Calculate the Pearson correlation coefficient between CPI and GDP
+    over a given quarterly time range.
+    """
+    # scan both tables
+    cpi_items = _scan_table(cpi_table)
+    gdp_items = _scan_table(gdp_table)
+
+    if not cpi_items:
+        raise HTTPException(status_code=404, detail="No CPI data found")
+    if not gdp_items:
+        raise HTTPException(status_code=404, detail="No GDP data found")
+
+    # filter by time range 
+    cpi_by_period = {}
+    for item in cpi_items:
+        tp = item.get("time_period", "")
+        if tp >= start and tp <= end and item.get("obs_value") is not None:
+            cpi_by_period[tp] = float(item["obs_value"])
+
+    gdp_by_period = {}
+    for item in gdp_items:
+        tp = item.get("time_period", "")
+        if tp >= start and tp <= end and item.get("obs_value") is not None:
+            gdp_by_period[tp] = float(item["obs_value"])
+
+    # find quarters that exist in both datasets
+    common_periods = sorted(set(cpi_by_period.keys()) & set(gdp_by_period.keys()))
+
+    if len(common_periods) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail=f"require at least 2 overlapping quarters to calculate correlation, found {len(common_periods)}"
+        )
+
+    cpi_values = [cpi_by_period[p] for p in common_periods]
+    gdp_values = [gdp_by_period[p] for p in common_periods]
+
+    correlation = _pearson_correlation(cpi_values, gdp_values)
+
+    if correlation is None:
+        raise HTTPException(status_code=400, detail="unable to calculate correlation")
+
+    return {
+        "analysis_type": "pearson_correlation",
+        "datasets": ["CPI", "GDP"],
+        "start": start,
+        "end": end,
+        "num_data_points": len(common_periods),
+        "correlation_coefficient": round(correlation, 4),
+        "interpretation": (
+            "strong positive" if correlation >= 0.7
+            else "moderate positive" if correlation >= 0.3
+            else "weak positive" if correlation >= 0
+            else "weak negative" if correlation >= -0.3
+            else "moderate negative" if correlation >= -0.7
+            else "strong negative"
+        ),
     }

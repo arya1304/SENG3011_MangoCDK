@@ -9,9 +9,9 @@ BUCKET_NAME = os.environ.get("BUCKET_NAME")
 router = APIRouter(prefix="/preprocess")
 
 s3 = boto3.client('s3')
-cpi_table = boto3.resource('dynamodb').Table(os.environ['CPI_TABLE_NAME'])
-unemployment_table = boto3.resource('dynamodb').Table(os.environ['UNEMPLOYMENT_TABLE_NAME'])
-gdp_table = boto3.resource('dynamodb').Table(os.environ['GDP_TABLE_NAME'])
+cpi_table = boto3.resource('dynamodb').Table(os.environ['CPI_TABLE_NAME']) # type: ignore
+unemployment_table = boto3.resource('dynamodb').Table(os.environ['UNEMPLOYMENT_TABLE_NAME']) # type: ignore
+gdp_table = boto3.resource('dynamodb').Table(os.environ['GDP_TABLE_NAME']) # type: ignore
 
 @router.post("/cpi")
 def preprocess_cpi(dataflowIdentifier: str, dataKey: str):
