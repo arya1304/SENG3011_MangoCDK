@@ -1,3 +1,34 @@
+## Docker Instructions
+
+### Prerequisites
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
+
+### Build the Image
+```bash
+docker build -t mango-api .
+```
+
+### Run the Container
+```bash
+docker run -p 8000:8000 -e BUCKET_NAME=MangoSharedBucket mango-api
+```
+
+### Access the API
+Once running, the API will be available at:
+```
+http://localhost:8000
+```
+
+API docs (Swagger UI) at:
+```
+http://localhost:8000/docs
+```
+
+### Example Request
+```bash
+curl -X POST "http://localhost:8000/collect/cpi?dataflowIdentifier=CPI&dataKey=1.1..Q&format=jsondata&detail=dataonly&startPeriod=2023-Q1&endPeriod=2023-Q4"
+```
+
 
 # Welcome to your CDK Python project!
 
