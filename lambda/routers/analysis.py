@@ -243,3 +243,95 @@ def get_cpi_trend(start: str = None, end: str = None, region: str = None):
         "trend": trend,
         "summary": summary
         }
+
+
+@router.get("/trend/unemployment")
+def get_unemployment_trend(start: str = None, end: str = None, region: str = None):
+    """
+    GET /public/analysis/trend/unemployment?start=2023-01&end=2024-12&region=AUS
+    Calculate the trend of unemployment over a given monthly time range, optionally filtered by region.
+    Returns the direction of change (growing/shrinking/stable).
+    """
+    if start and end:
+        items = _scan_table_filtered(unemployment_table, start, end)
+    else:
+        scan_kwargs = {}
+        if start:
+            scan_kwargs["FilterExpression"] = Attr("time_period").gte(start)
+        elif end:
+            scan_kwargs["FilterExpression"] = Attr("time_period").lte(end)
+        items = []
+        while True:
+            response = unemployment_table.scan(**scan_kwargs)
+            items.extend(response.get("Items", []))
+            last_key = response.get("LastEvaluatedKey")
+            if not last_key:
+                break
+            scan_kwargs["ExclusiveStartKey"] = last_key
+
+    if not items:
+        raise HTTPException(status_code=404, detail="No unemployment data found")
+
+    if region:
+        items = [item for item in items if item.get("region") == region]
+
+    if len(items) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 data points are required to calculate trend")
+
+    sorted_items = _sort_by_time_period(items)
+    trend, summary = _calculate_trend(sorted_items)
+    return {
+        "analysis_type": "unemployment_trend",
+        "dataset": "unemployment",
+        "start": start,
+        "end": end,
+        "region": region,
+        "trend": trend,
+        "summary": summary
+        }
+
+
+@router.get("/trend/gdp")
+def get_gdp_trend(start: str = None, end: str = None, region: str = None):
+    """
+    GET /public/analysis/trend/gdp?start=2023-Q1&end=2024-Q4&region=AUS
+    Calculate the trend of GDP over a given quarterly time range, optionally filtered by region.
+    Returns the direction of change (growing/shrinking/stable).
+    """
+    if start and end:
+        items = _scan_table_filtered(gdp_table, start, end)
+    else:
+        scan_kwargs = {}
+        if start:
+            scan_kwargs["FilterExpression"] = Attr("time_period").gte(start)
+        elif end:
+            scan_kwargs["FilterExpression"] = Attr("time_period").lte(end)
+        items = []
+        while True:
+            response = gdp_table.scan(**scan_kwargs)
+            items.extend(response.get("Items", []))
+            last_key = response.get("LastEvaluatedKey")
+            if not last_key:
+                break
+            scan_kwargs["ExclusiveStartKey"] = last_key
+
+    if not items:
+        raise HTTPException(status_code=404, detail="No GDP data found")
+
+    if region:
+        items = [item for item in items if item.get("region") == region]
+
+    if len(items) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 data points are required to calculate trend")
+
+    sorted_items = _sort_by_time_period(items)
+    trend, summary = _calculate_trend(sorted_items)
+    return {
+        "analysis_type": "gdp_trend",
+        "dataset": "gdp",
+        "start": start,
+        "end": end,
+        "region": region,
+        "trend": trend,
+        "summary": summary
+        }
