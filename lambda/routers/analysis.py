@@ -1,6 +1,7 @@
 import math
 import os
 import boto3
+from boto3.dynamodb.conditions import Attr
 from fastapi import APIRouter, HTTPException
 
 TABLE_NAME = os.environ.get("CPI_TABLE_NAME")
@@ -11,13 +12,19 @@ gdp_table = boto3.resource('dynamodb').Table(os.environ['GDP_TABLE_NAME']) # typ
 
 dynamodb = boto3.resource("dynamodb")
 
-def _scan_table(table):
-    """helper to scan an entire DynamoDB table"""
-    response = table.scan()
-    items = response.get("Items", [])
-    while "LastEvaluatedKey" in response:
-        response = table.scan(ExclusiveStartKey=response["LastEvaluatedKey"])
+def _scan_table_filtered(table, start: str, end: str):
+    """scan a DynamoDB table with a FilterExpression on time_period range"""
+    scan_kwargs = {
+        "FilterExpression": Attr("time_period").between(start, end),
+    }
+    items = []
+    while True:
+        response = table.scan(**scan_kwargs)
         items.extend(response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        scan_kwargs["ExclusiveStartKey"] = last_key
     return items
 
 
@@ -43,30 +50,29 @@ def _pearson_correlation(x, y):
 @router.get("/cpi-gdp-correlation")
 def get_cpi_gdp_correlation(start: str, end: str):
     """
-    GET /public/analysis/correlation?start=2023-Q1&end=2024-Q4
+    GET /public/analysis/cpi-gdp-correlation?start=2023-Q1&end=2024-Q4
     Calculate the Pearson correlation coefficient between CPI and GDP
     over a given quarterly time range.
     """
-    # scan both tables
-    cpi_items = _scan_table(cpi_table)
-    gdp_items = _scan_table(gdp_table)
+    # query both tables filtered by time range
+    cpi_items = _scan_table_filtered(cpi_table, start, end)
+    gdp_items = _scan_table_filtered(gdp_table, start, end)
 
     if not cpi_items:
         raise HTTPException(status_code=404, detail="No CPI data found")
     if not gdp_items:
         raise HTTPException(status_code=404, detail="No GDP data found")
 
-    # filter by time range 
     cpi_by_period = {}
     for item in cpi_items:
         tp = item.get("time_period", "")
-        if tp >= start and tp <= end and item.get("obs_value") is not None:
+        if item.get("obs_value") is not None:
             cpi_by_period[tp] = float(item["obs_value"])
 
     gdp_by_period = {}
     for item in gdp_items:
         tp = item.get("time_period", "")
-        if tp >= start and tp <= end and item.get("obs_value") is not None:
+        if item.get("obs_value") is not None:
             gdp_by_period[tp] = float(item["obs_value"])
 
     # find quarters that exist in both datasets
@@ -199,14 +205,29 @@ def get_cpi_trend(start: str = None, end: str = None, region: str = None):
     Calculate the trend of CPI over a given quarterly time range, optionally filtered by region.
     Returns the direction of change (growing/shrinking/stable).
     """
-    items = _scan_table(cpi_table)
+    if start and end:
+        items = _scan_table_filtered(cpi_table, start, end)
+    else:
+        # fallback to full scan when no range provided
+        scan_kwargs = {}
+        if start:
+            scan_kwargs["FilterExpression"] = Attr("time_period").gte(start)
+        elif end:
+            scan_kwargs["FilterExpression"] = Attr("time_period").lte(end)
+        items = []
+        while True:
+            response = cpi_table.scan(**scan_kwargs)
+            items.extend(response.get("Items", []))
+            last_key = response.get("LastEvaluatedKey")
+            if not last_key:
+                break
+            scan_kwargs["ExclusiveStartKey"] = last_key
+
     if not items:
         raise HTTPException(status_code=404, detail="No CPI data found")
-    
+
     if region:
         items = [item for item in items if item.get("region") == region]
-
-    items = _filter_by_time_period(items, start, end)
 
     if len(items) < 2:
         raise HTTPException(status_code=400, detail="At least 2 data points are required to calculate trend")
