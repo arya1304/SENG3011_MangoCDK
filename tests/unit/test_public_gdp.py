@@ -46,8 +46,9 @@ def create_dyanmo_table():
 
 @mock_aws
 def test_public_gdp_returns_correct_data():
-  
+
     table = create_dyanmo_table()
+    public_module.gdp_table = table
     table.put_item(Item={
         "dataset_id": "ABS:ANA_IND_GVA(1.0.0)",
         "time_period": "2023-Q1",
@@ -58,6 +59,7 @@ def test_public_gdp_returns_correct_data():
         "region": "AUS",
         "obs_value": Decimal("48016"),
         "obs_status": None,
+        "freq": "Q",
     })
 
     client = TestClient(app)
@@ -67,21 +69,23 @@ def test_public_gdp_returns_correct_data():
 
     body = response.json()
 
-    assert body["dataset"] == "ABS - Gross Domestic Product (GDP)"
+    assert body["data_source"] == "Australian Bureau of Statistics (ABS)"
+    assert body["dataset_type"] == "Government Economic Indicator"
+    assert body["dataset_id"] == "ABS:ANA_IND_GVA"
+    assert body["query"] == {"start": "2023-Q1", "end": "2023-Q4"}
     assert body["count"] == 1
     assert "timestamp" in body
 
     event = body["events"][0]
-    
-    assert event["id"] == "ABS:ANA_IND_GVA(1.0.0)"
-    assert event["region"] == "AUS"
+
     assert event["time_period"] == "2023-Q1"
+    assert event["region"] == "AUS"
     assert event["gdp_value"] == 48016.0
     assert event["data_item"] == "GPM"
-    assert event["source"] == "source"
     assert event["adjustment_type"] == "20"
     assert event["industry"] == "TOTAL"
     assert event["obs_status"] is None
+    assert event["freq"] == "Q"
 
 
 @mock_aws
@@ -104,20 +108,22 @@ def test_public_gdp_missing_params():
 def test_public_gdp_no_events():
     table = create_dyanmo_table()
     public_module.gdp_table = table
-    # leave the table empty 
-
+    # leave the table empty
 
     client = TestClient(app)
-    
-    response = client.get("/public/gdp?start=2025-Q1&end=2025-Q4")
-    assert response.status_code == 404
 
-    assert "No gross domestic product data found" in response.json()["detail"]
+    response = client.get("/public/gdp?start=2025-Q1&end=2025-Q4")
+    assert response.status_code == 200
+
+    body = response.json()
+    assert body["events"] == []
+    assert body["count"] == 0
 
 
 @mock_aws
 def test_public_gdp_filters():
     table = create_dyanmo_table()
+    public_module.gdp_table = table
 
     for t in ["2023-Q1", "2024-Q3", "2025-Q2", "2025-Q3"]:
         table.put_item(Item={
@@ -132,17 +138,17 @@ def test_public_gdp_filters():
             "obs_status": None,
         })
 
-    
     client = TestClient(app)
-    
+
     response = client.get("/public/gdp?start=2024-Q1&end=2025-Q2")
     assert response.status_code == 200
 
     body = response.json()
 
-    assert body["dataset"] == "ABS - Gross Domestic Product (GDP)"
+    assert body["data_source"] == "Australian Bureau of Statistics (ABS)"
+    assert body["dataset_id"] == "ABS:ANA_IND_GVA"
     assert body["count"] == 2
 
-    for event in body["events"]: 
-        assert event["time_period"] >= "2024-Q1" 
+    for event in body["events"]:
+        assert event["time_period"] >= "2024-Q1"
         assert event["time_period"] <= "2025-Q2"

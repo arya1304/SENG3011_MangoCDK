@@ -114,8 +114,7 @@ def _create_table(db):
 @mock_aws
 def test_get_cpi_returns_events_in_range():
     db = boto3.resource("dynamodb", region_name="us-east-1")
-    public_module.dynamodb = db
-    _create_table(db)
+    public_module.cpi_table = _create_table(db)
 
     resp = client.get("/public/cpi?start=2023-Q1&end=2023-Q4")
     assert resp.status_code == 200
@@ -123,62 +122,69 @@ def test_get_cpi_returns_events_in_range():
     body = resp.json()
     assert body["data_source"] == "Australian Bureau of Statistics (ABS)"
     assert body["dataset_type"] == "Government Economic Indicator"
+    assert body["dataset_id"] == "ABS:CPI"
+    assert body["query"] == {"start": "2023-Q1", "end": "2023-Q4"}
+    assert body["count"] == 4
+    assert "timestamp" in body
     assert len(body["events"]) == 4
 
 
 @mock_aws
 def test_get_cpi_events_sorted_by_time_period():
     db = boto3.resource("dynamodb", region_name="us-east-1")
-    public_module.dynamodb = db
-    _create_table(db)
+    public_module.cpi_table = _create_table(db)
 
     resp = client.get("/public/cpi?start=2023-Q1&end=2024-Q1")
     assert resp.status_code == 200
 
-    periods = [(e["year"], e["quarter"]) for e in resp.json()["events"]]
+    periods = [e["time_period"] for e in resp.json()["events"]]
     assert periods == sorted(periods)
 
 
 @mock_aws
 def test_get_cpi_excludes_outside_range():
     db = boto3.resource("dynamodb", region_name="us-east-1")
-    public_module.dynamodb = db
-    _create_table(db)
+    public_module.cpi_table = _create_table(db)
 
     # only 2023-Q2 and 2023-Q3 fall inside this range
     resp = client.get("/public/cpi?start=2023-Q2&end=2023-Q3")
     assert resp.status_code == 200
 
-    periods = [(e["year"], e["quarter"]) for e in resp.json()["events"]]
-    assert periods == [("2023", "Q2"), ("2023", "Q3")]
+    body = resp.json()
+    assert body["count"] == 2
+    periods = [e["time_period"] for e in body["events"]]
+    assert periods == ["2023-Q2", "2023-Q3"]
 
 
 @mock_aws
 def test_get_cpi_event_shape():
     db = boto3.resource("dynamodb", region_name="us-east-1")
-    public_module.dynamodb = db
-    _create_table(db)
+    public_module.cpi_table = _create_table(db)
 
     resp = client.get("/public/cpi?start=2023-Q1&end=2023-Q1")
     assert resp.status_code == 200
 
     event = resp.json()["events"][0]
+    assert event["time_period"] == "2023-Q1"
     assert event["year"] == "2023"
     assert event["quarter"] == "Q1"
     assert event["region"] == "50"
     assert event["cpi_value"] == 132.6
+    assert event["unit_measure"] == "IDX"
+    assert event["obs_status"] == "A"
+    assert event["freq"] == "Q"
 
 
 @mock_aws
 def test_get_cpi_empty_range():
     db = boto3.resource("dynamodb", region_name="us-east-1")
-    public_module.dynamodb = db
-    _create_table(db)
+    public_module.cpi_table = _create_table(db)
 
     # no data exists for 2020
     resp = client.get("/public/cpi?start=2020-Q1&end=2020-Q4")
     assert resp.status_code == 200
     assert resp.json()["events"] == []
+    assert resp.json()["count"] == 0
 
 
 def test_get_cpi_invalid_start_format():
@@ -206,11 +212,3 @@ def test_get_cpi_missing_params():
 def test_get_cpi_missing_end():
     resp = client.get("/public/cpi?start=2023-Q1")
     assert resp.status_code == 422
-
-
-def test_get_cpi_missing_table_name(monkeypatch):
-    import routers.public as public_module
-    monkeypatch.setattr(public_module, "TABLE_NAME", None)
-    resp = client.get("/public/cpi?start=2023-Q1&end=2024-Q4")
-    assert resp.status_code == 500
-    assert "CPI_TABLE_NAME" in resp.json()["detail"]

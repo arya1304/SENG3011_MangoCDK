@@ -92,26 +92,31 @@ def _create_table(db):
 @mock_aws
 def test_get_unemployment_returns_events_in_range():
     db = boto3.resource("dynamodb", region_name="us-east-1")
-    public_module.unemployment_table = db.Table(UNEMPLOYMENT_TABLE_NAME)
-    _create_table(db)
+    public_module.unemployment_table = _create_table(db)
 
     resp = client.get("/public/unemployment?start=2023-01&end=2023-03")
     assert resp.status_code == 200
 
     body = resp.json()
+    assert body["data_source"] == "Australian Bureau of Statistics (ABS)"
+    assert body["dataset_type"] == "Government Economic Indicator"
+    assert body["dataset_id"] == "ABS:LF"
+    assert body["query"] == {"start": "2023-01", "end": "2023-03"}
+    assert body["count"] == 3
+    assert "timestamp" in body
     assert len(body["events"]) == 3
 
 
 @mock_aws
 def test_get_unemployment_event_shape():
     db = boto3.resource("dynamodb", region_name="us-east-1")
-    public_module.unemployment_table = db.Table(UNEMPLOYMENT_TABLE_NAME)
-    _create_table(db)
+    public_module.unemployment_table = _create_table(db)
 
     resp = client.get("/public/unemployment?start=2023-01&end=2023-01")
     assert resp.status_code == 200
 
     event = resp.json()["events"][0]
+    assert event["time_period"] == "2023-01"
     assert event["year"] == "2023"
     assert event["month"] == "01"
     assert event["region"] == "AUS"
@@ -121,15 +126,14 @@ def test_get_unemployment_event_shape():
 @mock_aws
 def test_get_unemployment_excludes_outside_range():
     db = boto3.resource("dynamodb", region_name="us-east-1")
-    public_module.unemployment_table = db.Table(UNEMPLOYMENT_TABLE_NAME)
-    _create_table(db)
+    public_module.unemployment_table = _create_table(db)
 
     resp = client.get("/public/unemployment?start=2023-02&end=2023-03")
     assert resp.status_code == 200
 
-    events = resp.json()["events"]
-    assert len(events) == 2
-    months = [e["month"] for e in events]
+    body = resp.json()
+    assert body["count"] == 2
+    months = [e["month"] for e in body["events"]]
     assert "02" in months
     assert "03" in months
 
@@ -137,19 +141,18 @@ def test_get_unemployment_excludes_outside_range():
 @mock_aws
 def test_get_unemployment_empty_range():
     db = boto3.resource("dynamodb", region_name="us-east-1")
-    public_module.unemployment_table = db.Table(UNEMPLOYMENT_TABLE_NAME)
-    _create_table(db)
+    public_module.unemployment_table = _create_table(db)
 
     resp = client.get("/public/unemployment?start=2020-01&end=2020-12")
     assert resp.status_code == 200
     assert resp.json()["events"] == []
+    assert resp.json()["count"] == 0
 
 
 @mock_aws
 def test_get_unemployment_empty_table():
     db = boto3.resource("dynamodb", region_name="us-east-1")
-    public_module.unemployment_table = db.Table(UNEMPLOYMENT_TABLE_NAME)
-    db.create_table(
+    table = db.create_table(
         TableName=UNEMPLOYMENT_TABLE_NAME,
         KeySchema=[
             {"AttributeName": "dataset_id", "KeyType": "HASH"},
@@ -161,10 +164,12 @@ def test_get_unemployment_empty_table():
         ],
         BillingMode="PAY_PER_REQUEST",
     )
+    public_module.unemployment_table = table
 
     resp = client.get("/public/unemployment?start=2023-01&end=2024-12")
     assert resp.status_code == 200
     assert resp.json()["events"] == []
+    assert resp.json()["count"] == 0
 
 
 def test_get_unemployment_missing_params():
