@@ -2,6 +2,7 @@ import os
 import re
 from datetime import datetime, timezone
 from decimal import Decimal
+import json, time, logging
 
 import boto3
 from boto3.dynamodb.conditions import Attr
@@ -11,7 +12,7 @@ router = APIRouter(prefix="/public")
 unemployment_table = boto3.resource('dynamodb').Table(os.environ['UNEMPLOYMENT_TABLE_NAME']) # type: ignore
 cpi_table = boto3.resource('dynamodb').Table(os.environ['CPI_TABLE_NAME']) # type: ignore
 gdp_table = boto3.resource('dynamodb').Table(os.environ['GDP_TABLE_NAME']) # type: ignore
-
+logger = logging.getLogger()
 dynamodb = boto3.resource("dynamodb")
 
 ############################################################################
