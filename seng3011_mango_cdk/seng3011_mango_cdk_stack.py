@@ -77,6 +77,16 @@ class Seng3011MangoCdkStack(Stack):
             removal_policy=RemovalPolicy.DESTROY
         )
 
+        users_table = dynamodb.Table(
+            self, "UsersTable",
+            partition_key=dynamodb.Attribute(
+                name="email",
+                type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.DESTROY
+        )
+
         main_function = _lambda.Function(self, "MainFunction",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="main.handler",
@@ -88,7 +98,9 @@ class Seng3011MangoCdkStack(Stack):
                 "BUCKET_NAME": app_bucket.bucket_name,
                 "CPI_TABLE_NAME": cpi_table.table_name,
                 "UNEMPLOYMENT_TABLE_NAME": unemployment_table.table_name,
-                "GDP_TABLE_NAME": gdp_table.table_name
+                "GDP_TABLE_NAME": gdp_table.table_name,
+                "USERS_TABLE_NAME": users_table.table_name,
+                "JWT_SECRET": "mango-cdk-jwt-secret-key-2026",
             }
         )
 

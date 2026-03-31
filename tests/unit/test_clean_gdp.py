@@ -14,6 +14,8 @@ os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 os.environ["BUCKET_NAME"] = "test-bucket"
 os.environ["UNEMPLOYMENT_TABLE_NAME"] = "test-unemployment-table"
 os.environ["GDP_TABLE_NAME"] = "test-gdp-table"
+os.environ["USERS_TABLE_NAME"] = "test-users-table"
+os.environ["JWT_SECRET"] = "test-secret-key-that-is-long-enough-for-hs256"
 os.environ["CPI_TABLE_NAME"] = "test-cpi-table"
 
 import sys
