@@ -101,7 +101,9 @@ def get_cpi_gdp_correlation(start: str, end: str):
         "service":     "mango-api",
         "endpoint":    "/analysis/cpi-gdp-correlation",      
         "status":      200,                 
-        "duration_ms": int((time.time()-t0)*1000)
+        "duration_ms": int((time.time()-t0)*1000),
+        "start":       start,   
+        "end":         end
     }))
 
     return {
@@ -252,7 +254,9 @@ def get_cpi_trend(start: str = None, end: str = None, region: str = None):
         "service":     "mango-api",
         "endpoint":    "/analysis/cpi-gdp-correlation",      
         "status":      200,                 
-        "duration_ms": int((time.time()-t0)*1000)
+        "duration_ms": int((time.time()-t0)*1000),
+        "start":       start,   
+        "end":         end
     }))
 
     return {
@@ -361,9 +365,11 @@ def get_gdp_trend(start: str = None, end: str = None, region: str = None):
     
     logger.info(json.dumps({
         "service":     "mango-api",
-        "endpoint":    "/public/analysis/trend",      
+        "endpoint":    "/analysis/cpi-gdp-correlation",      
         "status":      200,                 
-        "duration_ms": int((time.time()-t0)*1000)
+        "duration_ms": int((time.time()-t0)*1000),
+        "start":       start,   
+        "end":         end
     }))
 
     return {

@@ -115,9 +115,11 @@ def get_cpi(
     
     logger.info(json.dumps({
         "service":     "mango-api",
-        "endpoint":    "/public/cpi",      
+        "endpoint":    "/analysis/cpi-gdp-correlation",      
         "status":      200,                 
-        "duration_ms": int((time.time()-t0)*1000)
+        "duration_ms": int((time.time()-t0)*1000),
+        "start":       start,   
+        "end":         end
     }))
 
     return _build_response(
@@ -164,9 +166,11 @@ def get_unemployment(
     
     logger.info(json.dumps({
         "service":     "mango-api",
-        "endpoint":    "/public/unemployment",      
+        "endpoint":    "/analysis/cpi-gdp-correlation",      
         "status":      200,                 
-        "duration_ms": int((time.time()-t0)*1000)
+        "duration_ms": int((time.time()-t0)*1000),
+        "start":       start,   
+        "end":         end
     }))
 
     return _build_response(
@@ -214,9 +218,11 @@ def get_gdp(
     
     logger.info(json.dumps({
         "service":     "mango-api",
-        "endpoint":    "/public/gdp",      
+        "endpoint":    "/analysis/cpi-gdp-correlation",      
         "status":      200,                 
-        "duration_ms": int((time.time()-t0)*1000)
+        "duration_ms": int((time.time()-t0)*1000),
+        "start":       start,   
+        "end":         end
     }))
 
     return _build_response(
