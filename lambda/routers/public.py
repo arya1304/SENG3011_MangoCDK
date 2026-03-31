@@ -12,7 +12,11 @@ router = APIRouter(prefix="/public")
 unemployment_table = boto3.resource('dynamodb').Table(os.environ['UNEMPLOYMENT_TABLE_NAME']) # type: ignore
 cpi_table = boto3.resource('dynamodb').Table(os.environ['CPI_TABLE_NAME']) # type: ignore
 gdp_table = boto3.resource('dynamodb').Table(os.environ['GDP_TABLE_NAME']) # type: ignore
+
 logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+
 dynamodb = boto3.resource("dynamodb")
 
 ############################################################################
@@ -84,6 +88,7 @@ def get_cpi(
     GET /public/cpi?start=2023-Q1&end=2024-Q4
     Retrieve CPI data from DynamoDB for the given quarter range.
     """
+    t0 = time.time()
     _validate_quarter(start, "start")
     _validate_quarter(end, "end")
 
@@ -107,6 +112,13 @@ def get_cpi(
     ]
 
     events.sort(key=lambda e: e.get("time_period", ""))
+    
+    logger.info(json.dumps({
+        "service":     "mango-api",
+        "endpoint":    "/public/cpi",      
+        "status":      200,                 
+        "duration_ms": int((time.time()-t0)*1000)
+    }))
 
     return _build_response(
         dataset_id="ABS:CPI",
@@ -125,6 +137,7 @@ def get_unemployment(
     GET /public/unemployment?start=2023-01&end=2024-12
     Retrieve unemployment data from DynamoDB for the given month range.
     """
+    t0 = time.time()
     _validate_month(start, "start")
     _validate_month(end, "end")
 
@@ -148,6 +161,13 @@ def get_unemployment(
     ]
 
     events.sort(key=lambda e: e.get("time_period", ""))
+    
+    logger.info(json.dumps({
+        "service":     "mango-api",
+        "endpoint":    "/public/unemployment",      
+        "status":      200,                 
+        "duration_ms": int((time.time()-t0)*1000)
+    }))
 
     return _build_response(
         dataset_id="ABS:LF",
@@ -166,6 +186,7 @@ def get_gdp(
     GET /public/gdp?start=2023-Q1&end=2024-Q4
     Retrieve GDP data from DynamoDB for the given quarter range.
     """
+    t0 = time.time()
     _validate_quarter(start, "start")
     _validate_quarter(end, "end")
 
@@ -190,6 +211,13 @@ def get_gdp(
     ]
 
     events.sort(key=lambda e: e.get("time_period", ""))
+    
+    logger.info(json.dumps({
+        "service":     "mango-api",
+        "endpoint":    "/public/gdp",      
+        "status":      200,                 
+        "duration_ms": int((time.time()-t0)*1000)
+    }))
 
     return _build_response(
         dataset_id="ABS:ANA_IND_GVA",

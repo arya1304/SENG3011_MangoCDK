@@ -3,6 +3,10 @@ import os
 import boto3
 from boto3.dynamodb.conditions import Attr
 from fastapi import APIRouter, HTTPException
+import json, time, logging
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 TABLE_NAME = os.environ.get("CPI_TABLE_NAME")
 router = APIRouter(prefix="/public/analysis")
@@ -54,6 +58,7 @@ def get_cpi_gdp_correlation(start: str, end: str):
     Calculate the Pearson correlation coefficient between CPI and GDP
     over a given quarterly time range.
     """
+    t0 = time.time()
     # query both tables filtered by time range
     cpi_items = _scan_table_filtered(cpi_table, start, end)
     gdp_items = _scan_table_filtered(gdp_table, start, end)
@@ -91,6 +96,13 @@ def get_cpi_gdp_correlation(start: str, end: str):
 
     if correlation is None:
         raise HTTPException(status_code=400, detail="unable to calculate correlation")
+    
+    logger.info(json.dumps({
+        "service":     "mango-api",
+        "endpoint":    "/analysis/cpi-gdp-correlation",      
+        "status":      200,                 
+        "duration_ms": int((time.time()-t0)*1000)
+    }))
 
     return {
         "analysis_type": "pearson_correlation",
@@ -205,6 +217,7 @@ def get_cpi_trend(start: str = None, end: str = None, region: str = None):
     Calculate the trend of CPI over a given quarterly time range, optionally filtered by region.
     Returns the direction of change (growing/shrinking/stable).
     """
+    t0 = time.time()
     if start and end:
         items = _scan_table_filtered(cpi_table, start, end)
     else:
@@ -234,6 +247,14 @@ def get_cpi_trend(start: str = None, end: str = None, region: str = None):
     
     sorted_items = _sort_by_time_period(items)
     trend, summary = _calculate_trend(sorted_items)
+    
+    logger.info(json.dumps({
+        "service":     "mango-api",
+        "endpoint":    "/analysis/cpi-gdp-correlation",      
+        "status":      200,                 
+        "duration_ms": int((time.time()-t0)*1000)
+    }))
+
     return {
         "analysis_type": "cpi_trend",
         "dataset": "cpi",
@@ -242,7 +263,7 @@ def get_cpi_trend(start: str = None, end: str = None, region: str = None):
         "region": region,
         "trend": trend,
         "summary": summary
-        }
+    }
 
 
 @router.get("/trend/unemployment")
@@ -252,6 +273,7 @@ def get_unemployment_trend(start: str = None, end: str = None, region: str = Non
     Calculate the trend of unemployment over a given monthly time range, optionally filtered by region.
     Returns the direction of change (growing/shrinking/stable).
     """
+    t0 = time.time()
     if start and end:
         items = _scan_table_filtered(unemployment_table, start, end)
     else:
@@ -280,6 +302,14 @@ def get_unemployment_trend(start: str = None, end: str = None, region: str = Non
 
     sorted_items = _sort_by_time_period(items)
     trend, summary = _calculate_trend(sorted_items)
+
+    logger.info(json.dumps({
+        "service":     "mango-api",
+        "endpoint":    "/public/analysis/trend/unemployment",      
+        "status":      200,                 
+        "duration_ms": int((time.time()-t0)*1000)
+    }))
+
     return {
         "analysis_type": "unemployment_trend",
         "dataset": "unemployment",
@@ -288,7 +318,7 @@ def get_unemployment_trend(start: str = None, end: str = None, region: str = Non
         "region": region,
         "trend": trend,
         "summary": summary
-        }
+    }
 
 
 @router.get("/trend/gdp")
@@ -298,6 +328,8 @@ def get_gdp_trend(start: str = None, end: str = None, region: str = None):
     Calculate the trend of GDP over a given quarterly time range, optionally filtered by region.
     Returns the direction of change (growing/shrinking/stable).
     """
+    t0 = time.time()
+    
     if start and end:
         items = _scan_table_filtered(gdp_table, start, end)
     else:
@@ -326,6 +358,14 @@ def get_gdp_trend(start: str = None, end: str = None, region: str = None):
 
     sorted_items = _sort_by_time_period(items)
     trend, summary = _calculate_trend(sorted_items)
+    
+    logger.info(json.dumps({
+        "service":     "mango-api",
+        "endpoint":    "/public/analysis/trend",      
+        "status":      200,                 
+        "duration_ms": int((time.time()-t0)*1000)
+    }))
+
     return {
         "analysis_type": "gdp_trend",
         "dataset": "gdp",
@@ -334,4 +374,4 @@ def get_gdp_trend(start: str = None, end: str = None, region: str = None):
         "region": region,
         "trend": trend,
         "summary": summary
-        }
+    }
