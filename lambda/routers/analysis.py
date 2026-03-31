@@ -3,7 +3,9 @@ import os
 import boto3
 from boto3.dynamodb.conditions import Attr
 from fastapi import APIRouter, HTTPException
-import json, time, logging
+import json
+import time
+import logging
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)

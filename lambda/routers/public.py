@@ -2,7 +2,9 @@ import os
 import re
 from datetime import datetime, timezone
 from decimal import Decimal
-import json, time, logging
+import json
+import time
+import logging
 
 import boto3
 from boto3.dynamodb.conditions import Attr
