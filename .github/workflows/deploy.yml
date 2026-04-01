@@ -53,7 +53,7 @@ jobs:
       - name: Update Lambda function code
         run: |
           aws lambda update-function-code \
-            --function-name Seng3011MangoCdkStack-staging-MainFunctionE9DD22DA-68j4sdpsXpiN \
+            --function-name Seng3011MangoCdkStack-staging-MainFunctionE9DD22DA-9R96gzKug9OC \
             --s3-bucket mango-shared-bucket-${{ secrets.AWS_ACCOUNT_ID }} \
             --s3-key lambda.zip
 
@@ -108,6 +108,6 @@ jobs:
       - name: Update Lambda function code
         run: |
           aws lambda update-function-code \
-            --function-name Seng3011MangoCdkStack-prod-MainFunctionE9DD22DA-68j4sdpsXpiN \
+            --function-name Seng3011MangoCdkStack-prod-MainFunctionE9DD22DA-AeUz0hVY6dnT \
             --s3-bucket mango-shared-bucket-${{ secrets.AWS_ACCOUNT_ID }} \
             --s3-key lambda.zip
