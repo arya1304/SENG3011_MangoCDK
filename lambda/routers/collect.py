@@ -7,7 +7,7 @@ import boto3
 ABS_API_URL = "https://data.api.abs.gov.au/rest/data"
 BUCKET_NAME = os.environ.get("BUCKET_NAME")
 
-router = APIRouter(prefix="/collect")
+router = APIRouter(prefix="/collect", tags=["Collect"])
 s3 = boto3.client('s3')
 
 @router.post("/cpi")

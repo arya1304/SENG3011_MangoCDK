@@ -10,7 +10,7 @@ import boto3
 from boto3.dynamodb.conditions import Attr
 from fastapi import APIRouter, HTTPException, Query
 
-router = APIRouter(prefix="/public")
+router = APIRouter(prefix="/public", tags=["Public"])
 unemployment_table = boto3.resource('dynamodb').Table(os.environ['UNEMPLOYMENT_TABLE_NAME']) # type: ignore
 cpi_table = boto3.resource('dynamodb').Table(os.environ['CPI_TABLE_NAME']) # type: ignore
 gdp_table = boto3.resource('dynamodb').Table(os.environ['GDP_TABLE_NAME']) # type: ignore
