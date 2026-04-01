@@ -6,7 +6,7 @@ import boto3
 from fastapi import APIRouter, HTTPException
 
 BUCKET_NAME = os.environ.get("BUCKET_NAME")
-router = APIRouter(prefix="/preprocess")
+router = APIRouter(prefix="/preprocess", tags=["Preprocess"])
 
 s3 = boto3.client('s3')
 cpi_table = boto3.resource('dynamodb').Table(os.environ['CPI_TABLE_NAME']) # type: ignore
