@@ -3,7 +3,9 @@ from mangum import Mangum
 from routers import collect, preprocess, public, analysis, auth
 
 import os
-app = FastAPI(root_path="" if os.environ.get("ENV") == "local" else "/prod")
+app = FastAPI(
+    openapi_url="/openapi.json" if os.environ.get("ENV") == "local" else "/prod/openapi.json"
+)
 
 app.include_router(collect.router)
 app.include_router(preprocess.router)
