@@ -92,7 +92,7 @@ class Seng3011MangoCdkStack(Stack):
             handler="main.handler",
             code=_lambda.Code.from_bucket(app_bucket, "lambda.zip"),
             role=lab_role,
-            timeout=Duration.seconds(300),
+            timeout=Duration.seconds(30),
             memory_size=256,
             environment={
                 "BUCKET_NAME": app_bucket.bucket_name,
