@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  deploy:
+  deploy-staging-env:
     runs-on: ubuntu-latest
 
     steps:
@@ -47,12 +47,67 @@ jobs:
           cd ..
           aws s3 cp lambda.zip s3://mango-shared-bucket-${{ secrets.AWS_ACCOUNT_ID }}/lambda.zip
 
-      - name: Deploy CDK stack
-        run: cdk deploy --require-approval never --no-asset-metadata
+      - name: Deploy CDK stack staging env
+        run: cdk deploy Seng3011MangoCdkStack-staging --require-approval never --no-asset-metadata
       
       - name: Update Lambda function code
         run: |
           aws lambda update-function-code \
-            --function-name Seng3011MangoCdkStack-MainFunctionE9DD22DA-68j4sdpsXpiN \
+            --function-name Seng3011MangoCdkStack-staging-MainFunctionE9DD22DA-68j4sdpsXpiN \
+            --s3-bucket mango-shared-bucket-${{ secrets.AWS_ACCOUNT_ID }} \
+            --s3-key lambda.zip
+
+
+  # prod only when staging succeeds
+  deploy-prod-env:
+    runs-on: ubuntu-latest
+    needs: deploy-staging-env
+    environment: prod
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install AWS CDK
+        run: npm install -g aws-cdk
+
+      - name: Install CDK dependencies
+        run: pip install -r requirements.txt
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Install Lambda dependencies and upload to S3
+        run: |
+          cd lambda
+          find . -mindepth 1 -maxdepth 1 ! -name '*.py' ! -name 'requirements.txt' ! -name 'routers' -exec rm -rf {} +
+          pip install -r requirements.txt -t .
+          zip -r ../lambda.zip .
+          cd ..
+          aws s3 cp lambda.zip s3://mango-shared-bucket-${{ secrets.AWS_ACCOUNT_ID }}/lambda.zip
+
+      - name: Deploy CDK stack prod env
+        run: cdk deploy Seng3011MangoCdkStack-prod --require-approval never --no-asset-metadata
+      
+      - name: Update Lambda function code
+        run: |
+          aws lambda update-function-code \
+            --function-name Seng3011MangoCdkStack-prod-MainFunctionE9DD22DA-68j4sdpsXpiN \
             --s3-bucket mango-shared-bucket-${{ secrets.AWS_ACCOUNT_ID }} \
             --s3-key lambda.zip
