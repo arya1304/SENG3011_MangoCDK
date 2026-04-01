@@ -11,7 +11,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 TABLE_NAME = os.environ.get("CPI_TABLE_NAME")
-router = APIRouter(prefix="/public/analysis")
+router = APIRouter(prefix="/public/analysis", tags=["Analysis"])
 unemployment_table = boto3.resource('dynamodb').Table(os.environ['UNEMPLOYMENT_TABLE_NAME']) # type: ignore
 cpi_table = boto3.resource('dynamodb').Table(os.environ['CPI_TABLE_NAME']) # type: ignore
 gdp_table = boto3.resource('dynamodb').Table(os.environ['GDP_TABLE_NAME']) # type: ignore
