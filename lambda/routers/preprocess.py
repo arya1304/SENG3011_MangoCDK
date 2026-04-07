@@ -429,29 +429,29 @@ def preprocess_clean_gdp(dataflowIdentifier: str, dataKey: str):
     if not events:
         raise HTTPException(status_code=404, detail="No events found in preprocessed data")
     
-    for event in events:
-        attribute = event.get("attribute", {})
+    with gdp_table.batch_writer() as batch:
+        for event in events:
+            attribute = event.get("attribute", {})
 
-        time_period = attribute.get("time_period", "")
-        parts = time_period.split("-")
-        obs_value = attribute.get("obs_value")
-        
-        each_row = {
-            "dataset_id": gdp_dataset_id,
-            "data_source": gdp_data_source,
-            "year": parts[0] if len(parts) > 0 else None,
-            "quarter": parts[1] if len(parts) > 1 else None,
-            "industry": attribute.get("industry"),
-            "region": attribute.get("region"),
-            "time_period": attribute.get("time_period"),
-            "obs_value": Decimal(str(obs_value)) if obs_value is not None else None,
-            "data_item": attribute.get("data_item"),
-            "adjustment_type": attribute.get("adjustment_type"),
-            "obs_status":attribute.get("obs_status"),
-        }
-        gdp_table.put_item(Item=each_row)  
-    
-    
+            time_period = attribute.get("time_period", "")
+            parts = time_period.split("-")
+            obs_value = attribute.get("obs_value")
+
+            each_row = {
+                "dataset_id": gdp_dataset_id,
+                "data_source": gdp_data_source,
+                "year": parts[0] if len(parts) > 0 else None,
+                "quarter": parts[1] if len(parts) > 1 else None,
+                "industry": attribute.get("industry"),
+                "region": attribute.get("region"),
+                "time_period": attribute.get("time_period"),
+                "obs_value": Decimal(str(obs_value)) if obs_value is not None else None,
+                "data_item": attribute.get("data_item"),
+                "adjustment_type": attribute.get("adjustment_type"),
+                "obs_status": attribute.get("obs_status"),
+            }
+            batch.put_item(Item=each_row)
+
     return {"message": "success"}
 
 
