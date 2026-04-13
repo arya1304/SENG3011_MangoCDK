@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI
 from fastapi.openapi.docs import get_swagger_ui_html
 from mangum import Mangum
-from routers import collect, preprocess, public, analysis, auth
+from routers import collect, preprocess, public, analysis, auth, visualise
 
 is_local = os.environ.get("ENV") == "local"
 
@@ -26,6 +26,10 @@ tags_metadata = [
     {
         "name": "Auth",
         "description": "User registration, login and JWT-based authentication.",
+    },
+    {
+        "name": "Visualise",
+        "description": "Endpoints for visualising economic data.",
     },
 ]
 
@@ -61,5 +65,6 @@ app.include_router(preprocess.router)
 app.include_router(public.router)
 app.include_router(analysis.router)
 app.include_router(auth.router)
+app.include_router(visualise.router)
 
 handler = Mangum(app)
