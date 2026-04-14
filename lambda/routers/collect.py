@@ -60,7 +60,7 @@ def collect_gdp(
     """
 
     dataflowIdentifier = "ABS,ANA_IND_GVA,1.0.0"
-    dataKey = "......Q"
+    dataKey = "VCH+PCT_VCH.GPM.SSS.20+30.TOTAL.AUS.Q"
 
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
 

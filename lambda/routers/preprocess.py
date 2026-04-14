@@ -134,7 +134,7 @@ def preprocess_gdp():
         raise HTTPException(status_code=500, detail="Server configuration error: BUCKET_NAME not set")
 
     dataflowIdentifier = "ABS,ANA_IND_GVA,1.0.0"
-    dataKey = "......Q"
+    dataKey = "VCH+PCT_VCH.GPM.SSS.20+30.TOTAL.AUS.Q"
 
     # find the latest file under {dataflowIdentifier}/{dataKey}/
     prefix = f"{dataflowIdentifier}/{dataKey}/"
