@@ -70,7 +70,7 @@ def test_preprocess_gdp_returns_correct_data_model():
     s3.create_bucket(Bucket="test-bucket")
     s3.put_object(
         Bucket="test-bucket",
-        Key="ABS,ANA_IND_GVA,1.0.0/......Q/2024-01-01T00-00-00Z.json",
+        Key="ABS,ANA_IND_GVA,1.0.0/VCH+PCT_VCH.GPM.SSS.20+30.TOTAL.AUS.Q/2024-01-01T00-00-00Z.json",
         Body=json.dumps(MOCK_RAW_GDP)
     )
     client = TestClient(app)
@@ -123,7 +123,7 @@ def test_preprocess_gdp_invalid_raw_data_format():
     bad_data = {"data": {}}
     s3.put_object(
         Bucket="test-bucket",
-        Key="ABS,ANA_IND_GVA,1.0.0/......Q/2024-01-01T00-00-00Z.json",
+        Key="ABS,ANA_IND_GVA,1.0.0/VCH+PCT_VCH.GPM.SSS.20+30.TOTAL.AUS.Q/2024-01-01T00-00-00Z.json",
         Body=json.dumps(bad_data)
     )
 
