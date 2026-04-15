@@ -3,8 +3,7 @@ import os
 from datetime import datetime, timezone
 import boto3
 from boto3.dynamodb.conditions import Attr
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import Response
+from fastapi import APIRouter, HTTPException
 import json
 import time
 import logging
