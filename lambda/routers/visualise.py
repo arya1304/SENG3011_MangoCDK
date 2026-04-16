@@ -3,7 +3,12 @@ from fastapi import APIRouter, HTTPException, Query
 from requests.exceptions import HTTPError
 
 from routers.public import get_cpi, get_gdp, get_unemployment
-from routers.analysis import get_cpi_gdp_correlation
+from routers.analysis import (
+    get_cpi_gdp_correlation,
+    get_cpi_trend,
+    get_gdp_trend,
+    get_unemployment_trend,
+)
 
 router = APIRouter(prefix="/visualise", tags=["Visualise"])
 
@@ -217,4 +222,94 @@ def visualise_unemployment(
         ],
     )
 
+    return result
+
+
+def _build_trend_datasets(trend_data, dataset_name):
+    periods = trend_data["trend"]
+
+    change_events = []
+    for p in periods:
+        if p["change_pct"] is None:
+            continue
+
+        time_period = p["time_period"]
+        if "Q" in time_period:
+            ts = _quarter_to_timestamp(time_period)
+            duration, unit = 3, "month"
+        else:
+            ts = _month_to_timestamp(time_period)
+            duration, unit = 1, "month"
+
+        change_events.append({
+            "time_object": {
+                "timestamp": ts,
+                "timezone": "+10:00",
+                "duration": duration,
+                "duration_unit": unit,
+            },
+            "event_type": "change_pct",
+            "attribute": {"value": p["change_pct"]},
+        })
+
+    return [
+        {
+            "datasetName": f"{dataset_name} Change (%)",
+            "attributeName": "value",
+            "events": change_events,
+        },
+    ]
+
+
+@router.get("/trend/cpi")
+def visualise_cpi_trend(
+    start: str = Query(None, description="Start quarter, e.g. 2023-Q1"),
+    end: str = Query(None, description="End quarter, e.g. 2024-Q4"),
+    region: str = Query(None, description="Region filter (optional)"),
+):
+    trend_data = get_cpi_trend(start=start, end=end, region=region)
+    datasets = _build_trend_datasets(trend_data, "CPI")
+    summary = trend_data["summary"]
+
+    result = visualise(
+        title=f"CPI Trend ({start} to {end}) - {summary['overall_direction']}, avg {summary['avg_change_pct']}%",
+        y_axis_title="Change (%)",
+        datasets=datasets,
+    )
+    return result
+
+
+@router.get("/trend/gdp")
+def visualise_gdp_trend(
+    start: str = Query(None),
+    end: str = Query(None),
+    region: str = Query(None),
+):
+    trend_data = get_gdp_trend(start=start, end=end, region=region)
+    datasets = _build_trend_datasets(trend_data, "GDP")
+    summary = trend_data["summary"]
+
+    result = visualise(
+        title=f"GDP Trend ({start} to {end}) - {summary['overall_direction']}, avg {summary['avg_change_pct']}%",
+        y_axis_title="Change (%)",
+        datasets=datasets,
+    )
+    return result
+
+
+@router.get("/trend/unemployment")
+def visualise_unemployment_trend(
+    start: str = Query(None),
+    end: str = Query(None),
+    region: str = Query(None),
+):
+    trend_data = get_unemployment_trend(start=start, end=end, region=region)
+    datasets = _build_trend_datasets(trend_data, "Unemployment")
+    summary = trend_data["summary"]
+
+    result = visualise(
+        title=f"Unemployment Trend ({start} to {end}) - {summary['overall_direction']}, avg {summary['avg_change_pct']}%",
+        y_axis_title="Change (%)",
+        datasets=datasets,
+    )
     return result
