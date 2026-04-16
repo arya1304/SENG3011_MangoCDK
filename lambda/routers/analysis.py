@@ -473,7 +473,7 @@ def get_indicator_change_analysis(comparison):
         return {"analysis": response[0]['generated_text'].strip()}
 
     except Exception as e:
-        return {"error": "Failed to get GPT analysis"}
+        return {f"Error in getting analysis: {str(e)}"}
     
 
 
