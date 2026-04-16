@@ -2,7 +2,7 @@ import requests
 from fastapi import APIRouter, HTTPException, Query
 from requests.exceptions import HTTPError
 
-from routers.public import get_cpi
+from routers.public import get_cpi, get_gdp
 
 router = APIRouter(prefix="/visualise", tags=["Visualise"])
 
@@ -65,6 +65,47 @@ def visualise_cpi(
         datasets=[
             {
                 "datasetName": "CPI",
+                "attributeName": "value",
+                "events": omega_events,
+            }
+        ],
+    )
+
+    return result
+
+@router.get("/gdp")
+def visualise_gdp(
+    start: str = Query(..., description="Start quarter, e.g. 2023-Q1"),
+    end: str = Query(..., description="End quarter, e.g. 2024-Q4"),
+):
+    """
+    GET /visualise/gdp?start=2023-Q1&end=2024-Q4
+    Visualise GDP data for the given quarter range using OMEGA.
+    """
+    gdp_data = get_gdp(start=start, end=end)
+
+    omega_events = []
+    for event in gdp_data["events"]:
+        omega_events.append({
+            "time_object": {
+                "timestamp": _quarter_to_timestamp(event["time_period"]),
+                "timezone": "+11:00",
+                "duration": 3,
+                "duration_unit": "month",
+            },
+            "event_type": "gdp",
+            "attribute": {
+                "value": event["gdp_value"],
+                "unit": event.get("unit_measure", ""),
+            },
+        })
+
+    result = visualise(
+        title=f"GDP ({start} to {end})",
+        y_axis_title="GDP Value",
+        datasets=[
+            {
+                "datasetName": "GDP",
                 "attributeName": "value",
                 "events": omega_events,
             }
