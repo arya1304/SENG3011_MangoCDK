@@ -6,6 +6,11 @@ from fastapi import APIRouter, HTTPException
 import json
 import time
 import logging
+from transformers import pipeline
+
+# load ai model from huggingface
+generator = pipeline("text-generation", model="gpt2")
+
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -383,3 +388,114 @@ def get_gdp_trend(start: str = None, end: str = None, region: str = None):
         "trend": trend,
         "summary": summary
     }
+
+
+# AI ENDPOINT ANALYSIS HELPERS
+
+
+# get the latest data only for cpi, gdp and employment
+def get_latest_data(start, end):
+    cpi_start = _scan_table_filtered(cpi_table, start, start)
+    cpi_end = _scan_table_filtered(cpi_table, end, end)
+    
+    gdp_start = _scan_table_filtered(gdp_table, start, start)
+    gdp_end = _scan_table_filtered(gdp_table, end, end)
+    
+    unemployment_start = _scan_table_filtered(unemployment_table, start, start)
+    unemployment_end = _scan_table_filtered(unemployment_table, end, end)
+
+    return {
+        "cpi": {"start": cpi_start, "end": cpi_end},
+        "gdp": {"start": gdp_start, "end": gdp_end},
+        "unemployment": {"start": unemployment_start, "end": unemployment_end}
+    }
+
+# compare the data
+def compare_data_from_time(latest_data, indicator=None):
+    comparison = {}
+    
+    if not indicator or indicator == "cpi":
+        cpi_start = latest_data["cpi"]["start"]
+        cpi_end = latest_data["cpi"]["end"]
+        comparison["cpi_change"] = f"From {cpi_start} to {cpi_end}."
+
+    if not indicator or indicator == "gdp":
+        gdp_start = latest_data["gdp"]["start"]
+        gdp_end = latest_data["gdp"]["end"]
+        comparison["gdp_change"] = f"From {gdp_start} to {gdp_end}."
+
+    if not indicator or indicator == "unemployment":
+        unemployment_start = latest_data["unemployment"]["start"]
+        unemployment_end = latest_data["unemployment"]["end"]
+        comparison["unemployment_change"] = f"From {unemployment_start} to {unemployment_end}."
+
+    return comparison
+
+def get_indicator_change_analysis(comparison):
+    # make the data into a string
+    comparison_str = "\n".join([f"{key}: {value}" for key, value in comparison.items()])
+
+    prompt = f"""
+    You are a macro-market analyst for Australian equities.
+    Use only the provided macroeconomic data from ABS to analyze the changes in market conditions.
+    Do not claim certainty in your analysis.
+    Do not provide personalized financial advice.
+    
+    ### Economic Data Changes:
+    {comparison_str}
+
+    ### Instructions:
+    1. **Compare the changes in CPI, GDP, and Unemployment between the provided start and end periods. If only one indicator such as CPI is given, focus on that.**
+    - Focus on the **direction** (increase/decrease) and **magnitude** of changes.
+    
+    2. **Explain the potential economic implications of each change:**
+    - **CPI**: What does the change in inflation imply for consumer behavior, interest rates, and inflation expectations?
+    - **GDP**: How does the change in economic growth affect market sentiment, economic stability, and sector performance?
+    - **Unemployment**: How does the change in employment levels impact consumer spending, confidence, and overall economic activity?
+
+    3. Provide a clear summary of the overall **economic outlook** based on these changes. 
+
+    4. Provide an explanation of how these changes might impact the sectors and market, and include any relevant implications.
+
+    ### Output:
+    Return the analysis in **JSON format** with the following structure:
+    - **cpi_change** (if included): A summary of CPI change and its economic implications.
+    - **gdp_change** (if included): A summary of GDP change and its economic implications.
+    - **unemployment_change** (if included): A summary of unemployment change and its economic implications.
+    - **overall_outlook**: A brief overview of the economic outlook based on the changes.
+
+    Return **only JSON**.
+    """
+
+    try:
+        # generate response using hugging face 
+        response = generator(prompt, max_length=500, num_return_sequences=1)
+        return {"analysis": response[0]['generated_text'].strip()}
+
+    except Exception as e:
+        return {"error": "Failed to get GPT analysis"}
+    
+
+
+# Route for /ai/change-analysis
+@router.post("/ai/change-analysis")
+async def ai_change_analysis(request: dict):
+    try:
+        start = request.get('start')
+        end = request.get('end')
+        indicator = request.get('indicator')  # optional to choose just one out of CPI, GDP, Unemployment
+        
+        if not start or not end:
+            raise HTTPException(status_code=400, detail="Both 'start' and 'end' dates are required.")
+
+    
+        latest_data = get_latest_data(start, end)
+        comparison = compare_data_from_time(latest_data, indicator)
+        gpt_response = get_indicator_change_analysis(comparison)
+
+        return gpt_response
+
+    except Exception as e:
+        logger.error(f"Error in /ai/change-analysis: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
