@@ -6,10 +6,16 @@ from fastapi import APIRouter, HTTPException
 import json
 import time
 import logging
-from transformers import pipeline
+import urllib.request
+import urllib.error
+# from transformers import pipeline
 
 # load ai model from huggingface
-generator = pipeline("text-generation", model="gpt2")
+# generator = pipeline("text-generation", model="gpt2")
+
+HF_API_URL = "https://api-inference.huggingface.co/models/gpt2"  # Example: Use 'gpt2' or any other model
+HF_TOKEN = os.getenv("HF_API_TOKEN")  # Ensure the API token is set as an environment variable
+
 
 
 logger = logging.getLogger()
@@ -431,29 +437,95 @@ def compare_data_from_time(latest_data, indicator=None):
 
     return comparison
 
+
+def call_hugging_face_api(prompt):
+    """Function to call the Hugging Face API for model inference."""
+    headers = {
+        "Authorization": f"Bearer {HF_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    body = json.dumps({"inputs": prompt}).encode('utf-8')
+    try:
+        req = urllib.request.Request(HF_API_URL, data=body, headers=headers)
+        with urllib.request.urlopen(req) as response:
+            result = json.loads(response.read().decode())
+            return result
+    except urllib.error.HTTPError as e:
+        return {"error": f"HTTP error: {e.code}"}
+    except urllib.error.URLError as e:
+        return {"error": f"URL error: {e.reason}"}
+    except Exception as e:
+        return {"error": f"Unexpected error: {str(e)}"}
+
+# def get_indicator_change_analysis(comparison):
+#     # make the data into a string
+#     comparison_str = "\n".join([f"{key}: {value}" for key, value in comparison.items()])
+
+#     prompt = f"""
+#     You are a macro-market analyst for Australian equities.
+#     Use only the provided macroeconomic data from ABS to analyze the changes in market conditions.
+#     Do not claim certainty in your analysis.
+#     Do not provide personalized financial advice.
+    
+#     ### Economic Data Changes:
+#     {comparison_str}
+
+#     ### Instructions:
+#     1. **Compare the changes in CPI, GDP, and Unemployment between the provided start and end periods. If only one indicator such as CPI is given, focus on that.**
+#     - Focus on the **direction** (increase/decrease) and **magnitude** of changes.
+    
+#     2. **Explain the potential economic implications of each change:**
+#     - **CPI**: What does the change in inflation imply for consumer behavior, interest rates, and inflation expectations?
+#     - **GDP**: How does the change in economic growth affect market sentiment, economic stability, and sector performance?
+#     - **Unemployment**: How does the change in employment levels impact consumer spending, confidence, and overall economic activity?
+
+#     3. Provide a clear summary of the overall **economic outlook** based on these changes. 
+
+#     4. Provide an explanation of how these changes might impact the sectors and market, and include any relevant implications.
+
+#     ### Output:
+#     Return the analysis in **JSON format** with the following structure:
+#     - **cpi_change** (if included): A summary of CPI change and its economic implications.
+#     - **gdp_change** (if included): A summary of GDP change and its economic implications.
+#     - **unemployment_change** (if included): A summary of unemployment change and its economic implications.
+#     - **overall_outlook**: A brief overview of the economic outlook based on the changes.
+
+#     Return **only JSON**.
+#     """
+
+#     try:
+#         # generate response using hugging face 
+#         response = generator(prompt, max_length=500, num_return_sequences=1)
+#         return {"analysis": response[0]['generated_text'].strip()}
+
+#     except Exception as e:
+#         return {f"Error in getting analysis: {str(e)}"}
+    
 def get_indicator_change_analysis(comparison):
-    # make the data into a string
+    """ Function to generate the analysis using Hugging Face API """
+    # Format the comparison into a readable string
     comparison_str = "\n".join([f"{key}: {value}" for key, value in comparison.items()])
 
+    # Construct the prompt for the model
     prompt = f"""
     You are a macro-market analyst for Australian equities.
     Use only the provided macroeconomic data from ABS to analyze the changes in market conditions.
     Do not claim certainty in your analysis.
     Do not provide personalized financial advice.
-    
+
     ### Economic Data Changes:
     {comparison_str}
 
     ### Instructions:
     1. **Compare the changes in CPI, GDP, and Unemployment between the provided start and end periods. If only one indicator such as CPI is given, focus on that.**
     - Focus on the **direction** (increase/decrease) and **magnitude** of changes.
-    
+
     2. **Explain the potential economic implications of each change:**
     - **CPI**: What does the change in inflation imply for consumer behavior, interest rates, and inflation expectations?
     - **GDP**: How does the change in economic growth affect market sentiment, economic stability, and sector performance?
     - **Unemployment**: How does the change in employment levels impact consumer spending, confidence, and overall economic activity?
 
-    3. Provide a clear summary of the overall **economic outlook** based on these changes. 
+    3. Provide a clear summary of the overall **economic outlook** based on these changes.
 
     4. Provide an explanation of how these changes might impact the sectors and market, and include any relevant implications.
 
@@ -468,14 +540,13 @@ def get_indicator_change_analysis(comparison):
     """
 
     try:
-        # generate response using hugging face 
-        response = generator(prompt, max_length=500, num_return_sequences=1)
-        return {"analysis": response[0]['generated_text'].strip()}
+        # Call Hugging Face API to generate the response
+        response = call_hugging_face_api(prompt)
 
+        # Return the result (the text from the model's response)
+        return {"analysis": response.get("generated_text", "No text generated")}
     except Exception as e:
-        return {f"Error in getting analysis: {str(e)}"}
-    
-
+        return {"error": f"Error in getting analysis: {str(e)}"}
 
 # Route for /ai/change-analysis
 @router.post("/ai/change-analysis")
@@ -498,4 +569,3 @@ async def ai_change_analysis(request: dict):
     except Exception as e:
         logger.error(f"Error in /ai/change-analysis: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
-
