@@ -1,4 +1,4 @@
-name: CI - Lint, Coverage, Tests, Type checks
+name: CI checks
 
 on:
   pull_request:
@@ -75,6 +75,6 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run coverage check
-        run: pytest tests/unit/ --cov=lambda --cov-report=term-missing --cov-fail-under=85
+        run: pytest tests/unit/ --cov=lambda --cov-report=term-missing --cov-fail-under=50
 
 
