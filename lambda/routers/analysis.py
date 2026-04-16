@@ -1,5 +1,6 @@
 import math
 import os
+from datetime import datetime, timezone
 import boto3
 from boto3.dynamodb.conditions import Attr
 from fastapi import APIRouter, HTTPException
@@ -396,6 +397,149 @@ def get_gdp_trend(start: str = None, end: str = None, region: str = None):
     }
 
 
+def _get_recent_quarters(n: int) -> list[str]:
+    now = datetime.now(timezone.utc)
+    quarters = []
+    year, quarter = now.year, (now.month - 1) // 3 + 1
+    for _ in range(n):
+        quarters.append(f"{year}-Q{quarter}")
+        quarter -= 1
+        if quarter == 0:
+            quarter = 4
+            year -= 1
+    return list(reversed(quarters))
+
+
+def _get_recent_months(n: int) -> list[str]:
+    now = datetime.now(timezone.utc)
+    months = []
+    year, month = now.year, now.month
+    for _ in range(n):
+        months.append(f"{year}-{month:02d}")
+        month -= 1
+        if month == 0:
+            month = 12
+            year -= 1
+    return list(reversed(months))
+
+
+def _pct_changes(items: list) -> list[float]:
+    sorted_items = sorted(items, key=lambda x: x.get("time_period", ""))
+    changes = []
+    for i in range(1, len(sorted_items)):
+        curr = to_float(sorted_items[i].get("obs_value"))
+        prev = to_float(sorted_items[i - 1].get("obs_value"))
+        if curr is not None and prev is not None and prev != 0:
+            changes.append((curr - prev) / abs(prev) * 100)
+    return changes
+
+@router.get("/recession-risk")
+def get_recession_risk():
+    """
+    GET /public/analysis/recession-risk
+
+    Detects recession signals by analysing unemployment trends, inflation, and
+    GDP growth. Returns a risk level and confidence score. If any indicator's
+    data is missing, its signal is reported as "Unknown" and the confidence is
+    scaled down proportionally rather than failing.
+    """
+    t0 = time.time()
+
+    quarters = _get_recent_quarters(8)
+    months = _get_recent_months(12)
+    q_start, q_end = quarters[0], quarters[-1]
+    m_start, m_end = months[0], months[-1]
+
+    cpi_items = _scan_table_filtered(cpi_table, q_start, q_end)
+    gdp_items = _scan_table_filtered(gdp_table, q_start, q_end)
+    unemp_items = _scan_table_filtered(unemployment_table, m_start, m_end)
+
+    if not cpi_items and not gdp_items and not unemp_items:
+        raise HTTPException(status_code=404, detail="No economic data available. Please collect and preprocess CPI, GDP, and unemployment data first.")
+
+    cpi_changes = _pct_changes(cpi_items)
+    gdp_changes = _pct_changes(gdp_items)
+    unemp_changes = _pct_changes(unemp_items)
+
+    # --- recession signals ---
+    signals = []
+    signal_count = 0
+
+    # 1. rising unemployment
+    if unemp_changes:
+        avg_unemp_change = sum(unemp_changes) / len(unemp_changes)
+        recent_unemp = unemp_changes[-1]
+        if avg_unemp_change > 0.5 or recent_unemp > 1.0:
+            signals.append({"indicator": "Unemployment", "signal": f"Unemployment rising (avg change: {round(avg_unemp_change, 2)}%)", "severity": "High"})
+            signal_count += 2
+        elif avg_unemp_change > 0:
+            signals.append({"indicator": "Unemployment", "signal": f"Unemployment slightly rising (avg change: {round(avg_unemp_change, 2)}%)", "severity": "Medium"})
+            signal_count += 1
+        else:
+            signals.append({"indicator": "Unemployment", "signal": "Unemployment stable or falling", "severity": "Low"})
+    else:
+        signals.append({"indicator": "Unemployment", "signal": "Insufficient data", "severity": "Unknown"})
+
+    # 2. high inflation
+    if cpi_changes:
+        avg_cpi_change = sum(cpi_changes) / len(cpi_changes)
+        if avg_cpi_change > 2.0:
+            signals.append({"indicator": "Inflation", "signal": f"High inflation (avg change: {round(avg_cpi_change, 2)}%)", "severity": "High"})
+            signal_count += 2
+        elif avg_cpi_change > 1.0:
+            signals.append({"indicator": "Inflation", "signal": f"Elevated inflation (avg change: {round(avg_cpi_change, 2)}%)", "severity": "Medium"})
+            signal_count += 1
+        else:
+            signals.append({"indicator": "Inflation", "signal": "Inflation within normal range", "severity": "Low"})
+    else:
+        signals.append({"indicator": "Inflation", "signal": "Insufficient data", "severity": "Unknown"})
+
+    # 3. GDP contraction (technical recession: 2+ consecutive negative quarters)
+    if gdp_changes:
+        avg_gdp_change = sum(gdp_changes) / len(gdp_changes)
+        negative_quarters = sum(1 for c in gdp_changes if c < 0)
+        if negative_quarters >= 2 or avg_gdp_change < -0.5:
+            signals.append({"indicator": "GDP", "signal": f"GDP contracting ({negative_quarters} negative quarter(s), avg change: {round(avg_gdp_change, 2)}%)", "severity": "High"})
+            signal_count += 2
+        elif avg_gdp_change < 0:
+            signals.append({"indicator": "GDP", "signal": f"GDP slightly contracting (avg change: {round(avg_gdp_change, 2)}%)", "severity": "Medium"})
+            signal_count += 1
+        else:
+            signals.append({"indicator": "GDP", "signal": f"GDP growing (avg change: {round(avg_gdp_change, 2)}%)", "severity": "Low"})
+    else:
+        signals.append({"indicator": "GDP", "signal": "Insufficient data", "severity": "Unknown"})
+
+    # Calculate confidence based on how much data we have
+    total_available = 3
+    total_with_data = sum(1 for s in signals if s["severity"] != "Unknown")
+    data_confidence = total_with_data / total_available
+
+    # Risk level and confidence
+    max_signal = 6  # 2 per indicator × 3 indicators
+    raw_risk = signal_count / max_signal
+    total_points = len(cpi_changes) + len(unemp_changes) + len(gdp_changes)
+    confidence = round(data_confidence * (0.6 + 0.4 * min(1.0, total_points / 15)), 2)
+
+    if raw_risk >= 0.5:
+        risk_level = "High"
+    elif raw_risk >= 0.25:
+        risk_level = "Moderate"
+    else:
+        risk_level = "Low"
+
+    logger.info(json.dumps({
+        "service": "mango-api",
+        "endpoint": "/public/analysis/recession-risk",
+        "status": 200,
+        "duration_ms": int((time.time() - t0) * 1000),
+    }))
+
+    return {
+        "risk_level": risk_level,
+        "confidence": confidence,
+        "signals": signals,
+        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
 # AI ENDPOINT ANALYSIS HELPERS
 
 
