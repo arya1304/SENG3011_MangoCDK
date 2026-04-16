@@ -2,7 +2,7 @@ import requests
 from fastapi import APIRouter, HTTPException, Query
 from requests.exceptions import HTTPError
 
-from routers.public import get_cpi, get_gdp
+from routers.public import get_cpi, get_gdp, get_unemployment
 from routers.analysis import get_cpi_gdp_correlation
 
 router = APIRouter(prefix="/visualise", tags=["Visualise"])
@@ -32,6 +32,10 @@ def _quarter_to_timestamp(quarter_str: str) -> str:
     year, q = quarter_str.split("-")
     month = quarter_map[q]
     return f"{year}-{month}-01 00:00:00.0000000"
+
+def _month_to_timestamp(month_str: str) -> str:
+    """'2023-01' -> '2023-01-01 00:00:00.0000000'"""
+    return f"{month_str}-01 00:00:00.0000000"
 
 @router.get("/cpi")
 def visualise_cpi(
@@ -169,6 +173,47 @@ def visualise_cpi_gdp_correlation(
                 "attributeName": "value",
                 "events": gdp_events,
             },
+        ],
+    )
+
+    return result
+
+@router.get("/unemployment")
+def visualise_unemployment(
+    start: str = Query(..., description="Start month, e.g. 2023-01"),
+    end: str = Query(..., description="End month, e.g. 2024-12"),
+):
+    """
+    GET /visualise/unemployment?start=2023-01&end=2024-12
+    Visualise unemployment data for the given month range using OMEGA.
+    """
+    unemployment_data = get_unemployment(start=start, end=end)
+
+    omega_events = []
+    for event in unemployment_data["events"]:
+        omega_events.append({
+            "time_object": {
+                "timestamp": _month_to_timestamp(event["time_period"]),
+                "timezone": "+10:00",
+                "duration": 1,
+                "duration_unit": "month",
+            },
+            "event_type": "unemployment",
+            "attribute": {
+                "value": event["unemployment_value"],
+                "unit": event.get("unit_measure", "%"),
+            },
+        })
+
+    result = visualise(
+        title=f"Unemployment ({start} to {end})",
+        y_axis_title="Unemployment Rate",
+        datasets=[
+            {
+                "datasetName": "Unemployment",
+                "attributeName": "value",
+                "events": omega_events,
+            }
         ],
     )
 
