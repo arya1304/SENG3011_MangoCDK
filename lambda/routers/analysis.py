@@ -438,8 +438,10 @@ def get_recession_risk():
     """
     GET /public/analysis/recession-risk
 
-    Detects recession signals by analysing unemployment trends and inflation.
-    Returns a risk level and confidence score.
+    Detects recession signals by analysing unemployment trends, inflation, and
+    GDP growth. Returns a risk level and confidence score. If any indicator's
+    data is missing, its signal is reported as "Unknown" and the confidence is
+    scaled down proportionally rather than failing.
     """
     t0 = time.time()
 
@@ -449,19 +451,21 @@ def get_recession_risk():
     m_start, m_end = months[0], months[-1]
 
     cpi_items = _scan_table_filtered(cpi_table, q_start, q_end)
+    gdp_items = _scan_table_filtered(gdp_table, q_start, q_end)
     unemp_items = _scan_table_filtered(unemployment_table, m_start, m_end)
 
-    if not cpi_items and not unemp_items:
-        raise HTTPException(status_code=404, detail="No economic data available. Please collect and preprocess CPI and unemployment data first.")
+    if not cpi_items and not gdp_items and not unemp_items:
+        raise HTTPException(status_code=404, detail="No economic data available. Please collect and preprocess CPI, GDP, and unemployment data first.")
 
     cpi_changes = _pct_changes(cpi_items)
+    gdp_changes = _pct_changes(gdp_items)
     unemp_changes = _pct_changes(unemp_items)
 
-    # --- Recession signals ---
+    # --- recession signals ---
     signals = []
     signal_count = 0
 
-    # 1. Rising unemployment
+    # 1. rising unemployment
     if unemp_changes:
         avg_unemp_change = sum(unemp_changes) / len(unemp_changes)
         recent_unemp = unemp_changes[-1]
@@ -476,7 +480,7 @@ def get_recession_risk():
     else:
         signals.append({"indicator": "Unemployment", "signal": "Insufficient data", "severity": "Unknown"})
 
-    # 2. High inflation
+    # 2. high inflation
     if cpi_changes:
         avg_cpi_change = sum(cpi_changes) / len(cpi_changes)
         if avg_cpi_change > 2.0:
@@ -490,15 +494,31 @@ def get_recession_risk():
     else:
         signals.append({"indicator": "Inflation", "signal": "Insufficient data", "severity": "Unknown"})
 
+    # 3. GDP contraction (technical recession: 2+ consecutive negative quarters)
+    if gdp_changes:
+        avg_gdp_change = sum(gdp_changes) / len(gdp_changes)
+        negative_quarters = sum(1 for c in gdp_changes if c < 0)
+        if negative_quarters >= 2 or avg_gdp_change < -0.5:
+            signals.append({"indicator": "GDP", "signal": f"GDP contracting ({negative_quarters} negative quarter(s), avg change: {round(avg_gdp_change, 2)}%)", "severity": "High"})
+            signal_count += 2
+        elif avg_gdp_change < 0:
+            signals.append({"indicator": "GDP", "signal": f"GDP slightly contracting (avg change: {round(avg_gdp_change, 2)}%)", "severity": "Medium"})
+            signal_count += 1
+        else:
+            signals.append({"indicator": "GDP", "signal": f"GDP growing (avg change: {round(avg_gdp_change, 2)}%)", "severity": "Low"})
+    else:
+        signals.append({"indicator": "GDP", "signal": "Insufficient data", "severity": "Unknown"})
+
     # Calculate confidence based on how much data we have
-    total_available = 2
+    total_available = 3
     total_with_data = sum(1 for s in signals if s["severity"] != "Unknown")
     data_confidence = total_with_data / total_available
 
     # Risk level and confidence
-    max_signal = 4  # 2 per indicator
+    max_signal = 6  # 2 per indicator × 3 indicators
     raw_risk = signal_count / max_signal
-    confidence = round(data_confidence * (0.6 + 0.4 * min(1.0, (len(cpi_changes) + len(unemp_changes)) / 10)), 2)
+    total_points = len(cpi_changes) + len(unemp_changes) + len(gdp_changes)
+    confidence = round(data_confidence * (0.6 + 0.4 * min(1.0, total_points / 15)), 2)
 
     if raw_risk >= 0.5:
         risk_level = "High"

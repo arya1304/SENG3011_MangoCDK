@@ -82,10 +82,40 @@ UNEMP_RISING = [
     {"dataset_id": "ABS:LF", "time_period": "2026-04", "obs_value": Decimal("6.6")},
 ]
 
+# GDP growing steadily
+GDP_GROWING = [
+    {"dataset_id": "ABS:GDP", "time_period": "2024-Q2", "obs_value": Decimal("500000")},
+    {"dataset_id": "ABS:GDP", "time_period": "2024-Q3", "obs_value": Decimal("510000")},
+    {"dataset_id": "ABS:GDP", "time_period": "2024-Q4", "obs_value": Decimal("520000")},
+    {"dataset_id": "ABS:GDP", "time_period": "2025-Q1", "obs_value": Decimal("530000")},
+    {"dataset_id": "ABS:GDP", "time_period": "2025-Q2", "obs_value": Decimal("540000")},
+    {"dataset_id": "ABS:GDP", "time_period": "2025-Q3", "obs_value": Decimal("550000")},
+    {"dataset_id": "ABS:GDP", "time_period": "2025-Q4", "obs_value": Decimal("560000")},
+    {"dataset_id": "ABS:GDP", "time_period": "2026-Q1", "obs_value": Decimal("570000")},
+]
+
+# GDP contracting (technical recession: consecutive negative quarters)
+GDP_CONTRACTING = [
+    {"dataset_id": "ABS:GDP", "time_period": "2024-Q2", "obs_value": Decimal("570000")},
+    {"dataset_id": "ABS:GDP", "time_period": "2024-Q3", "obs_value": Decimal("560000")},
+    {"dataset_id": "ABS:GDP", "time_period": "2024-Q4", "obs_value": Decimal("545000")},
+    {"dataset_id": "ABS:GDP", "time_period": "2025-Q1", "obs_value": Decimal("530000")},
+    {"dataset_id": "ABS:GDP", "time_period": "2025-Q2", "obs_value": Decimal("515000")},
+    {"dataset_id": "ABS:GDP", "time_period": "2025-Q3", "obs_value": Decimal("500000")},
+    {"dataset_id": "ABS:GDP", "time_period": "2025-Q4", "obs_value": Decimal("485000")},
+    {"dataset_id": "ABS:GDP", "time_period": "2026-Q1", "obs_value": Decimal("470000")},
+]
+
 
 def _create_tables(dynamodb):
     cpi = dynamodb.create_table(
         TableName="test-cpi-table",
+        KeySchema=[{"AttributeName": "dataset_id", "KeyType": "HASH"}, {"AttributeName": "time_period", "KeyType": "RANGE"}],
+        AttributeDefinitions=[{"AttributeName": "dataset_id", "AttributeType": "S"}, {"AttributeName": "time_period", "AttributeType": "S"}],
+        BillingMode="PAY_PER_REQUEST",
+    )
+    gdp = dynamodb.create_table(
+        TableName="test-gdp-table",
         KeySchema=[{"AttributeName": "dataset_id", "KeyType": "HASH"}, {"AttributeName": "time_period", "KeyType": "RANGE"}],
         AttributeDefinitions=[{"AttributeName": "dataset_id", "AttributeType": "S"}, {"AttributeName": "time_period", "AttributeType": "S"}],
         BillingMode="PAY_PER_REQUEST",
@@ -96,30 +126,35 @@ def _create_tables(dynamodb):
         AttributeDefinitions=[{"AttributeName": "dataset_id", "AttributeType": "S"}, {"AttributeName": "time_period", "AttributeType": "S"}],
         BillingMode="PAY_PER_REQUEST",
     )
-    return cpi, unemp
+    return cpi, gdp, unemp
+
+
+def _patch_tables(cpi, gdp, unemp):
+    analysis_module.cpi_table = cpi
+    analysis_module.gdp_table = gdp
+    analysis_module.unemployment_table = unemp
 
 
 def _setup_low_risk(dynamodb):
-    cpi, unemp = _create_tables(dynamodb)
+    cpi, gdp, unemp = _create_tables(dynamodb)
     for row in CPI_STABLE:
         cpi.put_item(Item=row)
+    for row in GDP_GROWING:
+        gdp.put_item(Item=row)
     for row in UNEMP_STABLE:
         unemp.put_item(Item=row)
-    analysis_module.cpi_table = cpi
-    analysis_module.unemployment_table = unemp
+    _patch_tables(cpi, gdp, unemp)
 
 
 def _setup_high_risk(dynamodb):
-    cpi, unemp = _create_tables(dynamodb)
+    cpi, gdp, unemp = _create_tables(dynamodb)
     for row in CPI_RISING:
         cpi.put_item(Item=row)
+    for row in GDP_CONTRACTING:
+        gdp.put_item(Item=row)
     for row in UNEMP_RISING:
         unemp.put_item(Item=row)
-    analysis_module.cpi_table = cpi
-    analysis_module.unemployment_table = unemp
-
-
-# ── recession-risk tests ────────────────────────────────────────────────
+    _patch_tables(cpi, gdp, unemp)
 
 
 @mock_aws
@@ -145,7 +180,7 @@ def test_risk_low_in_healthy_economy():
 
     body = client.get("/public/analysis/recession-risk").json()
     assert body["risk_level"] == "Low"
-    assert len(body["signals"]) == 2
+    assert len(body["signals"]) == 3
 
     severities = [s["severity"] for s in body["signals"]]
     assert "High" not in severities
@@ -165,6 +200,9 @@ def test_risk_high_in_weak_economy():
     cpi_signal = next(s for s in body["signals"] if s["indicator"] == "Inflation")
     assert cpi_signal["severity"] == "High"
 
+    gdp_signal = next(s for s in body["signals"] if s["indicator"] == "GDP")
+    assert gdp_signal["severity"] == "High"
+
 
 @mock_aws
 def test_risk_confidence_in_valid_range():
@@ -178,9 +216,8 @@ def test_risk_confidence_in_valid_range():
 @mock_aws
 def test_risk_no_data_returns_404():
     dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
-    cpi, unemp = _create_tables(dynamodb)
-    analysis_module.cpi_table = cpi
-    analysis_module.unemployment_table = unemp
+    cpi, gdp, unemp = _create_tables(dynamodb)
+    _patch_tables(cpi, gdp, unemp)
 
     response = client.get("/public/analysis/recession-risk")
     assert response.status_code == 404
@@ -189,11 +226,10 @@ def test_risk_no_data_returns_404():
 @mock_aws
 def test_risk_partial_data_unemployment_only():
     dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
-    cpi, unemp = _create_tables(dynamodb)
+    cpi, gdp, unemp = _create_tables(dynamodb)
     for row in UNEMP_RISING:
         unemp.put_item(Item=row)
-    analysis_module.cpi_table = cpi
-    analysis_module.unemployment_table = unemp
+    _patch_tables(cpi, gdp, unemp)
 
     response = client.get("/public/analysis/recession-risk")
     assert response.status_code == 200
@@ -205,18 +241,21 @@ def test_risk_partial_data_unemployment_only():
     cpi_signal = next(s for s in body["signals"] if s["indicator"] == "Inflation")
     assert cpi_signal["severity"] == "Unknown"
 
-    # Confidence should be lower with only one indicator
-    assert body["confidence"] < 0.7
+    gdp_signal = next(s for s in body["signals"] if s["indicator"] == "GDP")
+    assert gdp_signal["severity"] == "Unknown"
+
+    # Confidence should still be returned and positive even with one indicator
+    assert body["confidence"] > 0.0
+    assert body["confidence"] < 0.5
 
 
 @mock_aws
 def test_risk_partial_data_cpi_only():
     dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
-    cpi, unemp = _create_tables(dynamodb)
+    cpi, gdp, unemp = _create_tables(dynamodb)
     for row in CPI_RISING:
         cpi.put_item(Item=row)
-    analysis_module.cpi_table = cpi
-    analysis_module.unemployment_table = unemp
+    _patch_tables(cpi, gdp, unemp)
 
     response = client.get("/public/analysis/recession-risk")
     assert response.status_code == 200
@@ -228,12 +267,42 @@ def test_risk_partial_data_cpi_only():
     unemp_signal = next(s for s in body["signals"] if s["indicator"] == "Unemployment")
     assert unemp_signal["severity"] == "Unknown"
 
-    # Confidence should be lower with only one indicator
-    assert body["confidence"] < 0.7
+    gdp_signal = next(s for s in body["signals"] if s["indicator"] == "GDP")
+    assert gdp_signal["severity"] == "Unknown"
+
+    assert body["confidence"] > 0.0
+    assert body["confidence"] < 0.5
 
 
 @mock_aws
-def test_risk_signals_have_two_indicators():
+def test_risk_partial_data_no_gdp():
+    dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
+    cpi, gdp, unemp = _create_tables(dynamodb)
+    for row in CPI_STABLE:
+        cpi.put_item(Item=row)
+    for row in UNEMP_STABLE:
+        unemp.put_item(Item=row)
+    _patch_tables(cpi, gdp, unemp)
+
+    response = client.get("/public/analysis/recession-risk")
+    assert response.status_code == 200
+
+    body = response.json()
+    gdp_signal = next(s for s in body["signals"] if s["indicator"] == "GDP")
+    assert gdp_signal["severity"] == "Unknown"
+
+    cpi_signal = next(s for s in body["signals"] if s["indicator"] == "Inflation")
+    assert cpi_signal["severity"] != "Unknown"
+
+    unemp_signal = next(s for s in body["signals"] if s["indicator"] == "Unemployment")
+    assert unemp_signal["severity"] != "Unknown"
+
+    # 2 of 3 indicators have data — confidence should be ~2/3 of max
+    assert 0.0 < body["confidence"] <= 1.0
+
+
+@mock_aws
+def test_risk_signals_have_three_indicators():
     dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
     _setup_low_risk(dynamodb)
 
@@ -241,5 +310,5 @@ def test_risk_signals_have_two_indicators():
     indicators = [s["indicator"] for s in body["signals"]]
     assert "Unemployment" in indicators
     assert "Inflation" in indicators
-    assert "GDP" not in indicators
-    assert len(indicators) == 2
+    assert "GDP" in indicators
+    assert len(indicators) == 3
