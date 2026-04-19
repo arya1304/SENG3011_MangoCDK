@@ -104,3 +104,53 @@ def test_render_gdp_graph():
     data = response.json()
     assert "url" in data
     print(f"\nGDP Graph URL: {data['url']}\n")
+
+def test_render_unemployment_graph():
+    response = requests.post(
+        OMEGA_URL,
+        json={
+            "title": "Unemployment Rendering Test",
+            "yAxisTitle": "Unemployment Rate",
+            "returnURL": True,
+            "datasets": [{
+                "datasetName": "Unemployment",
+                "attributeName": "value",
+                "events": [
+                    {
+                        "time_object": {
+                            "timestamp": "2023-01-01 00:00:00.0000000",
+                            "timezone": "+11:00",
+                            "duration": 1,
+                            "duration_unit": "month"
+                            },
+                        "event_type": "unemployment",
+                        "attribute": {"value": 3.5, "unit": "%"},
+                    },
+                    {
+                        "time_object": {
+                            "timestamp": "2023-02-01 00:00:00.0000000",
+                            "timezone": "+11:00",
+                            "duration": 1,
+                            "duration_unit": "month"
+                            },
+                        "event_type": "unemployment",
+                        "attribute": {"value": 3.6, "unit": "%"},
+                    },
+                    {
+                        "time_object": {
+                            "timestamp": "2023-03-01 00:00:00.0000000",
+                            "timezone": "+11:00",
+                            "duration": 1,
+                            "duration_unit": "month"
+                            },
+                        "event_type": "unemployment",
+                        "attribute": {"value": 3.4, "unit": "%"},
+                    },
+                ],
+            }],
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "url" in data
+    print(f"\nUnemployment Graph: {data['url']}\n")
