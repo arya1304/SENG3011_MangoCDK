@@ -39,10 +39,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run unit tests with HTML report and coverage
-        run: pytest tests/ -v \
-          --html=reports/report.html --self-contained-html \
-          --cov=lambda --cov-report=html:reports/coverage_html \
-          --cov-report=term-missing --cov-fail-under=50
+        run: pytest tests/unit/ -v html=reports/report.html --self-contained-html cov=lambda --cov-report=html:reports/coverage_html cov-report=term-missing --cov-fail-under=50
 
       - name: Upload test report
         if : always()
