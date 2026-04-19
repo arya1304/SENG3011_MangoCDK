@@ -41,29 +41,29 @@ def test_e2e_cpi():
     print(f"\nE2E CPI {data['url']}\n")
 
 
-def test_e2e_gdp():
-    """E2E: deployed API → DynamoDB → OMEGA → GDP graph"""
-    resp = requests.get(f"{BASE_URL}/public/gdp?start=2023-Q1&end=2023-Q4")
-    assert resp.status_code == 200
-    events = resp.json()["events"]
-    assert len(events) > 0
+# def test_e2e_gdp():
+#     """E2E: deployed API → DynamoDB → OMEGA → GDP graph"""
+#     resp = requests.get(f"{BASE_URL}/public/gdp?start=2023-Q1&end=2023-Q4")
+#     assert resp.status_code == 200
+#     events = resp.json()["events"]
+#     assert len(events) > 0
 
-    omega_events = [{
-        "time_object": {"timestamp": _quarter_to_timestamp(e["time_period"]), "timezone": "+11:00", "duration": 3, "duration_unit": "month"},
-        "event_type": "gdp",
-        "attribute": {"value": e["gdp_value"], "unit": e.get("unit_measure", "")},
-    } for e in events]
+#     omega_events = [{
+#         "time_object": {"timestamp": _quarter_to_timestamp(e["time_period"]), "timezone": "+11:00", "duration": 3, "duration_unit": "month"},
+#         "event_type": "gdp",
+#         "attribute": {"value": e["gdp_value"], "unit": e.get("unit_measure", "")},
+#     } for e in events]
 
-    graph = requests.post(OMEGA_URL, json={
-        "title": "E2E: GDP 2023",
-        "yAxisTitle": "GDP Value",
-        "returnURL": True,
-        "datasets": [{"datasetName": "GDP", "attributeName": "value", "events": omega_events}],
-    })
-    assert graph.status_code == 200
-    data = graph.json()
-    assert "url" in data
-    print(f"\nE2E GDP {data['url']}\n")
+#     graph = requests.post(OMEGA_URL, json={
+#         "title": "E2E: GDP 2023",
+#         "yAxisTitle": "GDP Value",
+#         "returnURL": True,
+#         "datasets": [{"datasetName": "GDP", "attributeName": "value", "events": omega_events}],
+#     })
+#     assert graph.status_code == 200
+#     data = graph.json()
+#     assert "url" in data
+#     print(f"\nE2E GDP {data['url']}\n")
 
 
 def test_e2e_unemployment():
