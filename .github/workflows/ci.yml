@@ -38,8 +38,23 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
-      - name: Run tests
-        run: pytest tests/ -v
+      - name: Run unit tests with HTML report and coverage
+        run: |
+          pytest tests/unit/ -v --html=reports/report.html --self-contained-html --cov=lambda --cov-report=html:reports/coverage_html --cov-report=term-missing --cov-fail-under=50
+
+      - name: Upload test report
+        if : always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: reports/report.html
+
+      - name: Upload coverage report
+        if : always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: reports/coverage_html/
 
   type-check:
     runs-on: ubuntu-latest
@@ -58,23 +73,5 @@ jobs:
 
       - name: Run type checker
         run: pyright lambda/
-
-  coverage:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
-
-      - name: Run coverage check
-        run: pytest tests/unit/ --cov=lambda --cov-report=term-missing --cov-fail-under=50
 
 
