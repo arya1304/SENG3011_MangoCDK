@@ -693,7 +693,7 @@ def get_indicator_change_analysis(comparison):
         return {"error": f"Error in getting analysis: {str(e)}"}
 
 # Route for /ai/change-analysis
-@router.post("/ai/change-analysis")
+@router.get("/ai/change-analysis")
 async def ai_change_analysis(request: dict):
     try:
         start = request.get('start')
