@@ -1,4 +1,5 @@
 import aws_cdk as cdk
+import os
 from aws_cdk import (
     Stack,
     Duration,
@@ -95,13 +96,14 @@ class Seng3011MangoCdkStack(Stack):
             timeout=Duration.seconds(30),
             memory_size=256,
             environment={
-                "BUCKET_NAME": app_bucket.bucket_name,
-                "CPI_TABLE_NAME": cpi_table.table_name,
-                "UNEMPLOYMENT_TABLE_NAME": unemployment_table.table_name,
-                "GDP_TABLE_NAME": gdp_table.table_name,
-                "USERS_TABLE_NAME": users_table.table_name,
-                "JWT_SECRET": "mango-cdk-jwt-secret-key-2026",
-            }
+            "BUCKET_NAME": app_bucket.bucket_name,
+            "CPI_TABLE_NAME": cpi_table.table_name,
+            "UNEMPLOYMENT_TABLE_NAME": unemployment_table.table_name,
+            "GDP_TABLE_NAME": gdp_table.table_name,
+            "USERS_TABLE_NAME": users_table.table_name,
+            "JWT_SECRET": "mango-cdk-jwt-secret-key-2026",
+            "HF_API_TOKEN": os.environ.get("HF_API_TOKEN", ""),
+           }
         )
 
         api = apigw.LambdaRestApi(self, "MangoApi",
