@@ -9,13 +9,17 @@ import time
 import logging
 import urllib.request
 import urllib.error
-# from transformers import pipeline
+
+import requests
+from datetime import datetime, timedelta
+
+
 
 # load ai model from huggingface
 # generator = pipeline("text-generation", model="gpt2")
 
-HF_API_URL = "https://api-inference.huggingface.co/models/gpt2"  # Example: Use 'gpt2' or any other model
-HF_TOKEN = os.getenv("HF_API_TOKEN")  # Ensure the API token is set as an environment variable
+HF_API_URL = "https://api-inference.huggingface.co/models/gpt2"  
+HF_TOKEN = os.getenv("HF_API_TOKEN") 
 
 
 
@@ -763,3 +767,156 @@ async def ai_change_analysis(start: str, end: str, indicator: str = None):
         logger.exception("Error in /ai/change-analysis")
         raise HTTPException(status_code=500, detail=str(e))
     
+
+
+# MEDIAPULSE API INTEGRATION
+BASE_URL = "https://i9pdxmupj7.execute-api.ap-southeast-2.amazonaws.com/api"
+
+def get_sentiment(keyword, timeframe="7d", sourceId=None):
+    url = f"{BASE_URL}/sentiment"
+    params = {
+        "keyword": keyword,
+        "timeframe": timeframe,
+    }
+    if sourceId:
+        params["sourceId"] = sourceId
+
+    response = requests.get(url, params=params)
+    response.raise_for_status()
+    return response.json()
+
+
+def get_sentiment_trend(keyword, timeframe="7d", sourceId=None):
+    url = f"{BASE_URL}/sentiment/trend"
+    params = {
+        "keyword": keyword,
+        "timeframe": timeframe,
+    }
+    if sourceId:
+        params["sourceId"] = sourceId
+
+    response = requests.get(url, params=params)
+    response.raise_for_status()
+    return response.json()
+
+
+def get_volume_trend(keyword, timeframe="7d", sourceId=None):
+    url = f"{BASE_URL}/trend"
+    params = {
+        "keyword": keyword,
+        "timeframe": timeframe,
+    }
+    if sourceId:
+        params["sourceId"] = sourceId
+
+    response = requests.get(url, params=params)
+    response.raise_for_status()
+    return response.json()
+
+
+def interpret_sentiment(avg):
+    if avg > 0.05:
+        return "positive"
+    elif avg < -0.05:
+        return "negative"
+    return "neutral"
+
+
+def detect_trend(values):
+    if len(values) < 2:
+        return "stable"
+
+    if values[-1] > values[0]:
+        return "rising"
+    elif values[-1] < values[0]:
+        return "falling"
+    return "stable"
+
+
+def build_media_story(keyword, sentiment, sentiment_trend, volume_trend):
+    avg = sentiment["averageSentiment"]
+    sentiment_label = interpret_sentiment(avg)
+
+    sentiment_values = [d["averageSentiment"] for d in sentiment_trend["dataPoints"]]
+    volume_values = [d["articleCount"] for d in volume_trend["dataPoints"]]
+
+    sentiment_direction = detect_trend(sentiment_values)
+    coverage_direction = detect_trend(volume_values)
+
+    if sentiment_label == "negative" and coverage_direction == "rising":
+        headline = f"Media concern around {keyword} intensifies"
+    elif sentiment_label == "positive":
+        headline = f"Media tone on {keyword} turns positive"
+    else:
+        headline = f"Mixed media signals around {keyword}"
+
+    summary = (
+        f"Media sentiment is currently {sentiment_label}, "
+        f"with coverage {coverage_direction} over the past period."
+    )
+
+    bullets = [
+        f"{sentiment['articleCount']} articles analysed",
+        f"Sentiment trend is {sentiment_direction}",
+        f"Coverage trend is {coverage_direction}",
+    ]
+
+    return {
+        "headline": headline,
+        "summary": summary,
+        "bullets": bullets,
+        "signals": {
+            "sentimentDirection": sentiment_direction,
+            "coverageDirection": coverage_direction,
+        },
+    }
+
+
+@router.get("/media/context")
+def media_context(
+    keyword: str,
+    timeframe: str = "7d",
+    sourceId: str = None,
+):
+    try:
+        sentiment = get_sentiment(keyword, timeframe, sourceId)
+        sentiment_trend = get_sentiment_trend(keyword, timeframe, sourceId)
+        volume_trend = get_volume_trend(keyword, timeframe, sourceId)
+
+        story = build_media_story(keyword, sentiment, sentiment_trend, volume_trend)
+
+        return {
+            "keyword": keyword,
+            "timeframe": timeframe,
+            "sourceId": sourceId,
+
+            "sentiment": {
+                "average": sentiment["averageSentiment"],
+                "label": interpret_sentiment(sentiment["averageSentiment"]),
+                "articleCount": sentiment["articleCount"],
+                "distribution": sentiment["distribution"],
+            },
+
+            "coverage": {
+                "totalArticles": volume_trend["totalArticles"],
+                "trend": story["signals"]["coverageDirection"],
+            },
+
+            "signals": story["signals"],
+
+            "story": {
+                "headline": story["headline"],
+                "summary": story["summary"],
+                "bullets": story["bullets"],
+            },
+
+            "charts": {
+                "sentimentTrend": sentiment_trend["dataPoints"],
+                "volumeTrend": volume_trend["dataPoints"],
+            },
+        }
+
+    except requests.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Media API HTTP error: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
