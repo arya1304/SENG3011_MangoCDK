@@ -694,22 +694,15 @@ def get_indicator_change_analysis(comparison):
 
 # Route for /ai/change-analysis
 @router.get("/ai/change-analysis")
-async def ai_change_analysis(request: dict):
+async def ai_change_analysis(start: str, end: str, indicator: str = None):
     try:
-        start = request.get('start')
-        end = request.get('end')
-        indicator = request.get('indicator')  # optional to choose just one out of CPI, GDP, Unemployment
-        
         if not start or not end:
             raise HTTPException(status_code=400, detail="Both 'start' and 'end' dates are required.")
-
-    
+        
         latest_data = get_latest_data(start, end)
         comparison = compare_data_from_time(latest_data, indicator)
         gpt_response = get_indicator_change_analysis(comparison)
-
         return gpt_response
-
     except Exception as e:
         logger.error(f"Error in /ai/change-analysis: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
