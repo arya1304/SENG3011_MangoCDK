@@ -682,27 +682,84 @@ def get_indicator_change_analysis(comparison):
 
     Return **only JSON**.
     """
-
     try:
-        # Call Hugging Face API to generate the response
         response = call_hugging_face_api(prompt)
+        print("HF RAW RESPONSE:", response)
 
-        # Return the result (the text from the model's response)
-        return {"analysis": response.get("generated_text", "No text generated")}
+        if isinstance(response, dict) and "error" in response:
+            return {"error": response["error"]}
+
+        
+        if isinstance(response, list) and len(response) > 0:
+            generated_text = response[0].get("generated_text", "No text generated")
+            return {"analysis": generated_text}
+
+        
+        if isinstance(response, dict):
+            generated_text = response.get("generated_text", "No text generated")
+            return {"analysis": generated_text}
+
+        return {"error": f"Unexpected Hugging Face response format: {response}"}
+
     except Exception as e:
         return {"error": f"Error in getting analysis: {str(e)}"}
+    # try:
+    #     response = call_hugging_face_api(prompt)
+
+    #     # Handle list response
+    #     if isinstance(response, list) and len(response) > 0:
+    #         generated_text = response[0].get("generated_text", "No text generated")
+    #     elif isinstance(response, dict):
+    #         generated_text = response.get("generated_text", "No text generated")
+    #     else:
+    #         generated_text = str(response)
+
+    #     return {"analysis": generated_text}
+
+    # except Exception as e:
+    #     return {"error": f"Error in getting analysis: {str(e)}"}
+
+    # try:
+    #     # Call Hugging Face API to generate the response
+    #     response = call_hugging_face_api(prompt)
+
+    #     # Return the result (the text from the model's response)
+    #     return {"analysis": response.get("generated_text", "No text generated")}
+    # except Exception as e:
+    #     return {"error": f"Error in getting analysis: {str(e)}"}
+    
 
 # Route for /ai/change-analysis
 @router.get("/ai/change-analysis")
 async def ai_change_analysis(start: str, end: str, indicator: str = None):
+    # try:
+    #     if not start or not end:
+    #         raise HTTPException(status_code=400, detail="Both 'start' and 'end' dates are required.")
+        
+    #     latest_data = get_latest_data(start, end)
+    #     comparison = compare_data_from_time(latest_data, indicator)
+    #     gpt_response = get_indicator_change_analysis(comparison)
+    #     return gpt_response
+    # except Exception as e:
+    #     logger.error(f"Error in /ai/change-analysis: {str(e)}")
+    #     raise HTTPException(status_code=500, detail="Internal server error")
+    
     try:
         if not start or not end:
             raise HTTPException(status_code=400, detail="Both 'start' and 'end' dates are required.")
-        
+
         latest_data = get_latest_data(start, end)
         comparison = compare_data_from_time(latest_data, indicator)
-        gpt_response = get_indicator_change_analysis(comparison)
-        return gpt_response
+        ai_response = get_indicator_change_analysis(comparison)
+
+        if "error" in ai_response:
+            raise HTTPException(status_code=502, detail=ai_response["error"])
+
+        return ai_response
+
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error in /ai/change-analysis: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.exception("Error in /ai/change-analysis")
+        raise HTTPException(status_code=500, detail=str(e))
+    
