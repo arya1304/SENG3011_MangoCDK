@@ -1,12 +1,6 @@
 import requests
 from fastapi import APIRouter, HTTPException, Query
 from requests.exceptions import HTTPError
-import io
-import base64
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from matplotlib.patches import FancyBboxPatch
 
 from routers.public import get_cpi, get_gdp, get_unemployment
 from routers.analysis import (
@@ -31,11 +25,15 @@ def visualise(title, y_axis_title, datasets, return_url=True):
                 "returnURL": return_url,
                 "datasets": datasets,
             },
+            timeout=60,
         )
         response.raise_for_status()
         return response.json()
     except HTTPError as e:
         raise HTTPException(status_code=502, detail=f"OMEGA API error: {str(e)}")
+    except requests.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"OMEGA request failed: {str(e)}")
+
 
 def _quarter_to_timestamp(quarter_str: str) -> str:
     """'2023-Q1' -> '2023-01-01 00:00:00.0000000'"""
@@ -44,9 +42,11 @@ def _quarter_to_timestamp(quarter_str: str) -> str:
     month = quarter_map[q]
     return f"{year}-{month}-01 00:00:00.0000000"
 
+
 def _month_to_timestamp(month_str: str) -> str:
     """'2023-01' -> '2023-01-01 00:00:00.0000000'"""
     return f"{month_str}-01 00:00:00.0000000"
+
 
 def _time_object_from_period(time_period: str):
     """Build OMEGA time object from YYYY-Q# or YYYY-MM."""
@@ -64,6 +64,7 @@ def _time_object_from_period(time_period: str):
         "duration_unit": "month",
     }
 
+
 def _headline_for_story(indicator_name: str, overall_direction: str) -> str:
     if indicator_name == "CPI":
         if overall_direction == "growing":
@@ -80,6 +81,7 @@ def _headline_for_story(indicator_name: str, overall_direction: str) -> str:
         return "Labour market conditions remained stable"
 
     return f"{indicator_name} story view"
+
 
 def _build_story_text(summary: dict, indicator_name: str):
     overall = summary.get("overall_direction", "stable")
@@ -124,6 +126,7 @@ def _build_story_overlay_dataset(
         "events": events,
     }
 
+
 def _build_change_dataset(
     trend_data: dict,
     dataset_name: str,
@@ -148,169 +151,22 @@ def _build_change_dataset(
     }
 
 
-def _plot_story_card(points, title, headline, bullets, color, unit_label):
-    fig = plt.figure(figsize=(12, 7), dpi=160)
-    fig.patch.set_facecolor("#0d1117")
-
-    # Background canvas
-    ax_bg = fig.add_axes([0, 0, 1, 1])
-    ax_bg.set_axis_off()
-
-    # Main card
-    card = FancyBboxPatch(
-        (0.03, 0.05), 0.94, 0.90,
-        boxstyle="round,pad=0.012,rounding_size=0.02",
-        linewidth=1.2,
-        edgecolor="#1e2d3d",
-        facecolor="#111820",
-        transform=ax_bg.transAxes
-    )
-    ax_bg.add_patch(card)
-
-    # Data prep
-    x = list(range(len(points)))
-    labels = [p["time_period"] for p in points]
-    y = [p["obs_value"] for p in points]
-
-    latest_value = y[-1]
-    start_value = y[0]
-    total_change = latest_value - start_value
-    direction = "Rising" if total_change > 0 else "Falling" if total_change < 0 else "Stable"
-
-    max_idx = y.index(max(y))
-    min_idx = y.index(min(y))
-
-    # Header
-    fig.text(0.06, 0.90, title, color="white", fontsize=21, fontweight="bold")
-    fig.text(0.06, 0.855, headline, color=color, fontsize=13, fontweight="bold")
-
-    # Latest value box
-    latest_box = FancyBboxPatch(
-        (0.06, 0.68), 0.22, 0.12,
-        boxstyle="round,pad=0.012,rounding_size=0.02",
-        linewidth=1.0,
-        edgecolor="#2a3f55",
-        facecolor="#0d1117",
-        transform=ax_bg.transAxes
-    )
-    ax_bg.add_patch(latest_box)
-
-    fig.text(0.075, 0.765, "LATEST VALUE", color="#7d92a6", fontsize=9, fontweight="bold")
-    fig.text(0.075, 0.715, f"{latest_value:.2f} {unit_label}", color="white", fontsize=24, fontweight="bold")
-
-    # Direction badge
-    badge_color = "#00ffa3" if direction == "Rising" else "#ff6677" if direction == "Falling" else "#ffd166"
-    badge_box = FancyBboxPatch(
-        (0.30, 0.705), 0.12, 0.05,
-        boxstyle="round,pad=0.01,rounding_size=0.03",
-        linewidth=0.8,
-        edgecolor=badge_color,
-        facecolor="#0d1117",
-        transform=ax_bg.transAxes
-    )
-    ax_bg.add_patch(badge_box)
-    fig.text(0.322, 0.72, direction.upper(), color=badge_color, fontsize=10, fontweight="bold")
-
-    # Bullet insight box
-    insight_box = FancyBboxPatch(
-        (0.06, 0.42), 0.32, 0.20,
-        boxstyle="round,pad=0.012,rounding_size=0.02",
-        linewidth=1.0,
-        edgecolor="#2a3f55",
-        facecolor="#0d1117",
-        transform=ax_bg.transAxes
-    )
-    ax_bg.add_patch(insight_box)
-
-    fig.text(0.075, 0.585, "KEY TAKEAWAYS", color="#7d92a6", fontsize=9, fontweight="bold")
-    for i, bullet in enumerate(bullets[:3]):
-        fig.text(0.078, 0.545 - i * 0.045, f"• {bullet}", color="#c8d8e8", fontsize=10)
-
-    # Main chart
-    ax = fig.add_axes([0.43, 0.19, 0.50, 0.62])
-    ax.set_facecolor("#111820")
-    ax.plot(x, y, color=color, linewidth=2.8, marker="o", markersize=4)
-    ax.fill_between(x, y, [min(y)] * len(y), color=color, alpha=0.08)
-
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels, rotation=35, ha="right", fontsize=8, color="#9fb2c4")
-    ax.tick_params(axis="y", colors="#9fb2c4", labelsize=9)
-    ax.grid(True, linestyle="--", alpha=0.15)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.spines["left"].set_color("#334455")
-    ax.spines["bottom"].set_color("#334455")
-
-    # Annotations
-    ax.scatter([0], [y[0]], color=color, s=45, zorder=5)
-    ax.scatter([len(y)-1], [y[-1]], color=color, s=45, zorder=5)
-    ax.scatter([max_idx], [y[max_idx]], color="#ffffff", s=28, zorder=5)
-    ax.scatter([min_idx], [y[min_idx]], color="#ffffff", s=28, zorder=5)
-
-    ax.annotate(
-        f"Start {y[0]:.2f}",
-        (0, y[0]),
-        xytext=(8, 10),
-        textcoords="offset points",
-        color="white",
-        fontsize=8
-    )
-    ax.annotate(
-        f"End {y[-1]:.2f}",
-        (len(y)-1, y[-1]),
-        xytext=(8, -14),
-        textcoords="offset points",
-        color="white",
-        fontsize=8
-    )
-    ax.annotate(
-        f"Max {max(y):.2f}",
-        (max_idx, y[max_idx]),
-        xytext=(8, 8),
-        textcoords="offset points",
-        color="white",
-        fontsize=8
-    )
-    ax.annotate(
-        f"Min {min(y):.2f}",
-        (min_idx, y[min_idx]),
-        xytext=(8, -14),
-        textcoords="offset points",
-        color="white",
-        fontsize=8
-    )
-
-    # Footer
-    fig.text(0.06, 0.09, "Source: ABS · Generated by Mangonomics", color="#6f8294", fontsize=9)
-
-    buf = io.BytesIO()
-    plt.savefig(buf, format="png", bbox_inches="tight", facecolor=fig.get_facecolor())
-    plt.close(fig)
-    buf.seek(0)
-
-    encoded = base64.b64encode(buf.read()).decode("utf-8")
-    return f"data:image/png;base64,{encoded}"
-
 @router.get("/cpi")
 def visualise_cpi(
     start: str = Query(..., description="Start quarter, e.g. 2023-Q1"),
     end: str = Query(..., description="End quarter, e.g. 2024-Q4"),
 ):
-    """
-    GET /visualise/cpi?start=2023-Q1&end=2024-Q4
-    Visualise CPI data for the given quarter range using OMEGA.
-    """
     cpi_data = get_cpi(start=start, end=end)
 
     omega_events = []
     for event in cpi_data["events"]:
         omega_events.append({
             "time_object": {
-            "timestamp": _quarter_to_timestamp(event["time_period"]),
-            "timezone": "+11:00",
-            "duration": 3,
-            "duration_unit": "month",
-        },
+                "timestamp": _quarter_to_timestamp(event["time_period"]),
+                "timezone": "+11:00",
+                "duration": 3,
+                "duration_unit": "month",
+            },
             "event_type": "cpi",
             "attribute": {
                 "value": event["cpi_value"],
@@ -329,18 +185,14 @@ def visualise_cpi(
             }
         ],
     )
-
     return result
+
 
 @router.get("/gdp")
 def visualise_gdp(
     start: str = Query(..., description="Start quarter, e.g. 2023-Q1"),
     end: str = Query(..., description="End quarter, e.g. 2024-Q4"),
 ):
-    """
-    GET /visualise/gdp?start=2023-Q1&end=2024-Q4
-    Visualise GDP data for the given quarter range using OMEGA.
-    """
     gdp_data = get_gdp(start=start, end=end)
 
     omega_events = []
@@ -370,19 +222,14 @@ def visualise_gdp(
             }
         ],
     )
-
     return result
+
 
 @router.get("/cpi-gdp-correlation")
 def visualise_cpi_gdp_correlation(
     start: str = Query(..., description="Start quarter, e.g. 2023-Q1"),
     end: str = Query(..., description="End quarter, e.g. 2024-Q4"),
 ):
-    """
-    GET /visualise/cpi-gdp-correlation?start=2023-Q1&end=2024-Q4
-    Visualise CPI and GDP on the same graph (normalised to base 100),
-    with the Pearson correlation coefficient shown in the title.
-    """
     correlation_result = get_cpi_gdp_correlation(start=start, end=end)
     coef = correlation_result["correlation_coefficient"]
     interpretation = correlation_result["interpretation"]
@@ -429,18 +276,14 @@ def visualise_cpi_gdp_correlation(
             },
         ],
     )
-
     return result
+
 
 @router.get("/unemployment")
 def visualise_unemployment(
     start: str = Query(..., description="Start month, e.g. 2023-01"),
     end: str = Query(..., description="End month, e.g. 2024-12"),
 ):
-    """
-    GET /visualise/unemployment?start=2023-01&end=2024-12
-    Visualise unemployment data for the given month range using OMEGA.
-    """
     unemployment_data = get_unemployment(start=start, end=end)
 
     omega_events = []
@@ -470,7 +313,6 @@ def visualise_unemployment(
             }
         ],
     )
-
     return result
 
 
@@ -512,8 +354,8 @@ def _build_trend_datasets(trend_data, dataset_name):
 
 @router.get("/trend/cpi")
 def visualise_cpi_trend(
-    start: str = Query(None, description="Start quarter, e.g. 2023-Q1"),
-    end: str = Query(None, description="End quarter, e.g. 2024-Q4"),
+    start: str = Query(None, description="Start month, e.g. 2023-01"),
+    end: str = Query(None, description="End month, e.g. 2024-12"),
     region: str = Query(None, description="Region filter (optional)"),
 ):
     trend_data = get_cpi_trend(start=start, end=end, region=region)
@@ -564,179 +406,120 @@ def visualise_unemployment_trend(
     return result
 
 
+# -----------------------------
+# New newsroom / story visuals
+# -----------------------------
+
 @router.get("/cpi-story")
-def visualise_cpi_story(start: str, end: str, region: str = None):
+def visualise_cpi_story(
+    start: str = Query(..., description="Start month, e.g. 2023-01"),
+    end: str = Query(..., description="End month, e.g. 2024-12"),
+    region: str = Query(None, description="Region filter, e.g. 50"),
+):
+    """
+    Newsroom-style CPI card:
+    main observed-value series + change% series,
+    with a headline-like title for editorial use.
+    """
     trend_data = get_cpi_trend(start=start, end=end, region=region)
     summary = trend_data["summary"]
 
     headline, bullets = _build_story_text(summary, "CPI")
+    bullet_suffix = " | ".join(bullets[:3])
 
-    image = _plot_story_card(
-        trend_data["trend"],
-        title="Inflation Snapshot",
-        headline=headline,
-        bullets=bullets,
-        color="#00e5ff",
-        unit_label="IDX",
+    datasets = [
+        _build_story_overlay_dataset(trend_data, "CPI Level"),
+        _build_change_dataset(trend_data, "CPI Change (%)"),
+    ]
+
+    result = visualise(
+        title=f"{headline} · {bullet_suffix}",
+        y_axis_title="Observed value / change %",
+        datasets=datasets,
     )
+    return result
 
-    return {"url": image}
 
 @router.get("/unemployment-story")
-def visualise_unemployment_story(start: str, end: str, region: str = None):
+def visualise_unemployment_story(
+    start: str = Query(..., description="Start month, e.g. 2023-01"),
+    end: str = Query(..., description="End month, e.g. 2024-12"),
+    region: str = Query(None, description="Region filter, e.g. AUS"),
+):
+    """
+    Newsroom-style unemployment card:
+    main observed-value series + change% series,
+    with a headline-like title for editorial use.
+    """
     trend_data = get_unemployment_trend(start=start, end=end, region=region)
     summary = trend_data["summary"]
 
     headline, bullets = _build_story_text(summary, "Unemployment")
+    bullet_suffix = " | ".join(bullets[:3])
 
-    image = _plot_story_card(
-        trend_data["trend"],
-        title="Labour Market Snapshot",
-        headline=headline,
-        bullets=bullets,
-        color="#00ffa3",
-        unit_label="%",
+    datasets = [
+        _build_story_overlay_dataset(trend_data, "Unemployment Level"),
+        _build_change_dataset(trend_data, "Unemployment Change (%)"),
+    ]
+
+    result = visualise(
+        title=f"{headline} · {bullet_suffix}",
+        y_axis_title="Observed value / change %",
+        datasets=datasets,
     )
+    return result
 
-    return {"url": image}
 
 @router.get("/cost-of-living-comparison")
 def visualise_cost_of_living_comparison(
-    cpi_start: str,
-    cpi_end: str,
-    unemployment_start: str,
-    unemployment_end: str,
+    cpi_start: str = Query(..., description="CPI start month, e.g. 2023-01"),
+    cpi_end: str = Query(..., description="CPI end month, e.g. 2024-12"),
+    unemployment_start: str = Query(..., description="Unemployment start month, e.g. 2023-01"),
+    unemployment_end: str = Query(..., description="Unemployment end month, e.g. 2024-12"),
+    cpi_region: str = Query(None, description="CPI region, e.g. 50"),
+    unemployment_region: str = Query(None, description="Unemployment region, e.g. AUS"),
 ):
-    cpi = get_cpi_trend(start=cpi_start, end=cpi_end)
-    unemp = get_unemployment_trend(start=unemployment_start, end=unemployment_end)
+    """
+    Comparison export graphic for journalists:
+    CPI and unemployment together for cost-of-living reporting.
+    """
+    cpi_trend = get_cpi_trend(start=cpi_start, end=cpi_end, region=cpi_region)
+    unemployment_trend = get_unemployment_trend(
+        start=unemployment_start,
+        end=unemployment_end,
+        region=unemployment_region,
+    )
 
-    cpi_summary = cpi["summary"]
-    unemp_summary = unemp["summary"]
-
-    cpi_vals = [p["obs_value"] for p in cpi["trend"]]
-    cpi_labels = [p["time_period"] for p in cpi["trend"]]
-    unemp_vals = [p["obs_value"] for p in unemp["trend"]]
-    unemp_labels = [p["time_period"] for p in unemp["trend"]]
+    cpi_summary = cpi_trend["summary"]
+    unemployment_summary = unemployment_trend["summary"]
 
     cpi_dir = cpi_summary["overall_direction"]
-    unemp_dir = unemp_summary["overall_direction"]
+    unemp_dir = unemployment_summary["overall_direction"]
 
     if cpi_dir == "growing" and unemp_dir == "shrinking":
-        comparison_headline = "Inflation pressure rises as labour market stays tight"
+        headline = "Inflation pressure rises as labour market stays tight"
     elif cpi_dir == "growing" and unemp_dir == "growing":
-        comparison_headline = "Prices and unemployment rise together"
+        headline = "Prices and unemployment rise together"
     elif cpi_dir == "shrinking" and unemp_dir == "growing":
-        comparison_headline = "Inflation eases as labour market softens"
+        headline = "Inflation eases as labour market softens"
     else:
-        comparison_headline = "Macro conditions remain mixed"
+        headline = "Macro conditions remain mixed"
 
-    fig = plt.figure(figsize=(13, 8), dpi=160)
-    fig.patch.set_facecolor("#0d1117")
-
-    ax_bg = fig.add_axes([0, 0, 1, 1])
-    ax_bg.set_axis_off()
-
-    card = FancyBboxPatch(
-        (0.03, 0.05), 0.94, 0.90,
-        boxstyle="round,pad=0.012,rounding_size=0.02",
-        linewidth=1.2,
-        edgecolor="#1e2d3d",
-        facecolor="#111820",
-        transform=ax_bg.transAxes
+    subtitle = (
+        f"CPI latest: {cpi_summary.get('avg_change_pct', 0)}% avg change | "
+        f"Unemployment latest: {unemployment_summary.get('avg_change_pct', 0)}% avg change"
     )
-    ax_bg.add_patch(card)
 
-    # Title + headline
-    fig.text(0.06, 0.91, "Cost of Living Snapshot", color="white", fontsize=22, fontweight="bold")
-    fig.text(0.06, 0.865, comparison_headline, color="#ffd166", fontsize=13, fontweight="bold")
-
-    # CPI latest box
-    cpi_box = FancyBboxPatch(
-        (0.06, 0.74), 0.18, 0.10,
-        boxstyle="round,pad=0.012,rounding_size=0.02",
-        linewidth=1.0,
-        edgecolor="#2a3f55",
-        facecolor="#0d1117",
-        transform=ax_bg.transAxes
-    )
-    ax_bg.add_patch(cpi_box)
-    fig.text(0.075, 0.807, "LATEST CPI", color="#7d92a6", fontsize=9, fontweight="bold")
-    fig.text(0.075, 0.765, f"{cpi_vals[-1]:.2f} IDX", color="#00e5ff", fontsize=19, fontweight="bold")
-
-    # Unemployment latest box
-    unemp_box = FancyBboxPatch(
-        (0.27, 0.74), 0.18, 0.10,
-        boxstyle="round,pad=0.012,rounding_size=0.02",
-        linewidth=1.0,
-        edgecolor="#2a3f55",
-        facecolor="#0d1117",
-        transform=ax_bg.transAxes
-    )
-    ax_bg.add_patch(unemp_box)
-    fig.text(0.285, 0.807, "LATEST UNEMPLOYMENT", color="#7d92a6", fontsize=9, fontweight="bold")
-    fig.text(0.285, 0.765, f"{unemp_vals[-1]:.2f} %", color="#00ffa3", fontsize=19, fontweight="bold")
-
-    # Bullet insights
-    bullet_box = FancyBboxPatch(
-        (0.06, 0.54), 0.39, 0.14,
-        boxstyle="round,pad=0.012,rounding_size=0.02",
-        linewidth=1.0,
-        edgecolor="#2a3f55",
-        facecolor="#0d1117",
-        transform=ax_bg.transAxes
-    )
-    ax_bg.add_patch(bullet_box)
-
-    bullets = [
-        f"CPI direction: {cpi_dir}",
-        f"Unemployment direction: {unemp_dir}",
-        f"CPI avg change: {cpi_summary.get('avg_change_pct', 0)}% | Unemployment avg change: {unemp_summary.get('avg_change_pct', 0)}%",
+    datasets = [
+        _build_story_overlay_dataset(cpi_trend, "CPI Level"),
+        _build_story_overlay_dataset(unemployment_trend, "Unemployment Level"),
+        _build_change_dataset(cpi_trend, "CPI Change (%)"),
+        _build_change_dataset(unemployment_trend, "Unemployment Change (%)"),
     ]
-    fig.text(0.075, 0.648, "EDITORIAL TAKEAWAYS", color="#7d92a6", fontsize=9, fontweight="bold")
-    for i, bullet in enumerate(bullets):
-        fig.text(0.078, 0.615 - i * 0.04, f"• {bullet}", color="#c8d8e8", fontsize=10)
 
-    # CPI chart
-    ax1 = fig.add_axes([0.52, 0.54, 0.40, 0.27])
-    ax1.set_facecolor("#111820")
-    x1 = list(range(len(cpi_vals)))
-    ax1.plot(x1, cpi_vals, color="#00e5ff", linewidth=2.5, marker="o", markersize=4)
-    ax1.fill_between(x1, cpi_vals, [min(cpi_vals)] * len(cpi_vals), color="#00e5ff", alpha=0.08)
-    ax1.set_title("CPI", color="white", fontsize=12, loc="left")
-    ax1.set_xticks(x1)
-    ax1.set_xticklabels(cpi_labels, rotation=30, ha="right", fontsize=8, color="#9fb2c4")
-    ax1.tick_params(axis="y", colors="#9fb2c4", labelsize=8)
-    ax1.grid(True, linestyle="--", alpha=0.14)
-    ax1.spines["top"].set_visible(False)
-    ax1.spines["right"].set_visible(False)
-    ax1.spines["left"].set_color("#334455")
-    ax1.spines["bottom"].set_color("#334455")
-    ax1.annotate(f"{cpi_vals[-1]:.2f}", (x1[-1], cpi_vals[-1]), xytext=(8, -12), textcoords="offset points", color="white", fontsize=8)
-
-    # Unemployment chart
-    ax2 = fig.add_axes([0.52, 0.18, 0.40, 0.27])
-    ax2.set_facecolor("#111820")
-    x2 = list(range(len(unemp_vals)))
-    ax2.plot(x2, unemp_vals, color="#00ffa3", linewidth=2.5, marker="o", markersize=4)
-    ax2.fill_between(x2, unemp_vals, [min(unemp_vals)] * len(unemp_vals), color="#00ffa3", alpha=0.08)
-    ax2.set_title("Unemployment", color="white", fontsize=12, loc="left")
-    ax2.set_xticks(x2)
-    ax2.set_xticklabels(unemp_labels, rotation=30, ha="right", fontsize=8, color="#9fb2c4")
-    ax2.tick_params(axis="y", colors="#9fb2c4", labelsize=8)
-    ax2.grid(True, linestyle="--", alpha=0.14)
-    ax2.spines["top"].set_visible(False)
-    ax2.spines["right"].set_visible(False)
-    ax2.spines["left"].set_color("#334455")
-    ax2.spines["bottom"].set_color("#334455")
-    ax2.annotate(f"{unemp_vals[-1]:.2f}", (x2[-1], unemp_vals[-1]), xytext=(8, -12), textcoords="offset points", color="white", fontsize=8)
-
-    # Footer
-    fig.text(0.06, 0.10, "Source: ABS · Generated by Mangonomics", color="#6f8294", fontsize=9)
-
-    buf = io.BytesIO()
-    plt.savefig(buf, format="png", bbox_inches="tight", facecolor=fig.get_facecolor())
-    plt.close(fig)
-    buf.seek(0)
-
-    encoded = base64.b64encode(buf.read()).decode("utf-8")
-    return {"url": f"data:image/png;base64,{encoded}"}
+    result = visualise(
+        title=f"{headline} · {subtitle}",
+        y_axis_title="Observed value / change %",
+        datasets=datasets,
+    )
+    return result
