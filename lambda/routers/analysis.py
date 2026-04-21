@@ -548,15 +548,15 @@ def get_latest_data(start, end):
     cpi_start = _scan_table_filtered(cpi_table, start, start)
     cpi_end = _scan_table_filtered(cpi_table, end, end)
     
-    gdp_start = _scan_table_filtered(gdp_table, start, start)
-    gdp_end = _scan_table_filtered(gdp_table, end, end)
+    # gdp_start = _scan_table_filtered(gdp_table, start, start)
+    # gdp_end = _scan_table_filtered(gdp_table, end, end)
     
     unemployment_start = _scan_table_filtered(unemployment_table, start, start)
     unemployment_end = _scan_table_filtered(unemployment_table, end, end)
 
     return {
         "cpi": {"start": cpi_start, "end": cpi_end},
-        "gdp": {"start": gdp_start, "end": gdp_end},
+        # "gdp": {"start": gdp_start, "end": gdp_end},
         "unemployment": {"start": unemployment_start, "end": unemployment_end}
     }
 
