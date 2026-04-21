@@ -406,10 +406,6 @@ def visualise_unemployment_trend(
     return result
 
 
-# -----------------------------
-# New newsroom / story visuals
-# -----------------------------
-
 @router.get("/cpi-story")
 def visualise_cpi_story(
     start: str = Query(..., description="Start month, e.g. 2023-01"),
