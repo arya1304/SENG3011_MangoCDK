@@ -2,6 +2,7 @@ import os
 from fastapi import FastAPI
 from fastapi.openapi.docs import get_swagger_ui_html
 from mangum import Mangum
+from fastapi.middleware.cors import CORSMiddleware
 from routers import collect, preprocess, public, analysis, auth, visualise
 
 is_local = os.environ.get("ENV") == "local"
@@ -53,6 +54,20 @@ app = FastAPI(
     docs_url=None,
     openapi_tags=tags_metadata,
     servers=[{"url": "https://x9rgu2z2vh.execute-api.us-east-1.amazonaws.com/prod", "description": "Production"}],
+)
+
+allowed_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://mango-frontend-sigma.vercel.app",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 @app.get("/docs", include_in_schema=False)
