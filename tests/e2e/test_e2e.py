@@ -3,7 +3,6 @@
 # UC3 — Arya: recession signal + public sentiment
 # UC4 — Jimin: CPI & unemployment trends + media sentiment for opinion piece
 
-import uuid
 import pytest
 import requests
  
