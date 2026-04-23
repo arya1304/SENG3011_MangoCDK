@@ -59,7 +59,11 @@ app = FastAPI(
 allowed_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "https://mango-frontend-sigma.vercel.app",
+    "https://mango-frontend-three.vercel.app/dashboard",
+    "https://mango-frontend-three.vercel.app/login",
+    "https://mango-frontend-three.vercel.app/signup",
+    "https://mango-frontend-three.vercel.app/about",
+
 ]
 
 app.add_middleware(
